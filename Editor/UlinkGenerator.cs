@@ -92,6 +92,7 @@ namespace Ulink.Editor
 using System;
 using Ulink.Runtime;
 using UnityEngine;
+using UnityEngine.UIElements;
 
 {(string.IsNullOrEmpty(namespaceName) ? string.Empty : $"namespace {namespaceName}\n{{")}
     public partial class {className} 
