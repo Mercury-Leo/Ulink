@@ -7,14 +7,10 @@ namespace Ulink.Runtime
     [Serializable]
     public struct ControllerType
     {
-        [SerializeField] private string typeName;
+        [SerializeField] public string TypeName;
 
-        public Type? Type
-        {
-            get => string.IsNullOrEmpty(typeName) ? null : Type.GetType(typeName);
-            set => typeName = value?.FullName ?? string.Empty;
-        }
+        public Type? Type => string.IsNullOrEmpty(TypeName) ? null : Type.GetType(TypeName);
 
-        public static ControllerType Empty => new() { typeName = string.Empty };
+        public static ControllerType Empty => new() { TypeName = string.Empty };
     }
 }

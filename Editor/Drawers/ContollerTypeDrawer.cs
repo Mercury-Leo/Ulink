@@ -37,11 +37,9 @@ namespace Ulink.Editor
             };
             container.Add(searchField);
 
-            var typeNameProp = property.FindPropertyRelative("typeName");
+            var typeNameProp = property.FindPropertyRelative(nameof(ControllerType.TypeName));
 
-            var allTypes = TypeCache.GetTypesDerivedFrom<IUIController>()
-                .OrderBy(t => t.Name)
-                .ToList();
+            var allTypes = TypeCache.GetTypesDerivedFrom<IUIController>().OrderBy(type => type.Name).ToList();
 
             var filteredTypes = new List<Type> { null };
             filteredTypes.AddRange(allTypes);
@@ -50,8 +48,8 @@ namespace Ulink.Editor
             int defaultIndex = 0;
             if (!string.IsNullOrEmpty(savedName))
             {
-                var savedType = Type.GetType(savedName);
-                var idx = allTypes.FindIndex(t => t == savedType);
+                var savedType = allTypes.First(type => type.AssemblyQualifiedName == savedName);
+                var idx = allTypes.IndexOf(savedType);
                 if (idx >= 0) defaultIndex = idx + 1; // +1 for null placeholder
             }
 
@@ -85,11 +83,13 @@ namespace Ulink.Editor
                 filteredTypes.Add(null);
                 var matches = string.IsNullOrEmpty(filter)
                     ? allTypes
-                    : allTypes.Where(t => t.Name.IndexOf(filter, StringComparison.OrdinalIgnoreCase) >= 0);
+                    : allTypes.Where(type => type.Name.IndexOf(filter, StringComparison.OrdinalIgnoreCase) >= 0);
                 filteredTypes.AddRange(matches);
                 dropdown.choices = new List<Type>(filteredTypes);
-                if (!filteredTypes.Contains(dropdown.value))
+                if (!filteredTypes.Contains(dropdown.value) && dropdown.value != null)
+                {
                     dropdown.value = null;
+                }
             });
 
             return container;
