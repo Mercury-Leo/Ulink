@@ -1,0 +1,16 @@
+{
+  "name": "com.leosclockworks.ulink",
+  "version": "1.0.0",
+  "displayName": "Ulink",
+  "description": "Framework to inject controllers into Visual Elements",
+  "keywords": [
+    "UIToolKit",
+	"Visual Element"
+  ],
+  "author": {
+    "name": "Mercury Finnegan",
+    "email": "Kansamas@gmail.com",
+    "url": "https://mercury-leo.github.io/"
+  },
+  "unity": "2019.1"
+}
