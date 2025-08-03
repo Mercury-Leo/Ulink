@@ -124,7 +124,7 @@ using UnityEngine.UIElements;
                 {{
                     _controller = null;
                     _controllerType = ControllerType.Empty;
-                    Debug.LogWarning($"Failed to initialize Ulink Controller: {e}");
+                    Debug.LogWarning($""Failed to initialize Ulink Controller: {{e}}"");
                 }}
             }}
         }}
