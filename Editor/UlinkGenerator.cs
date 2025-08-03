@@ -114,9 +114,18 @@ using UnityEngine.UIElements;
                     return;
                 }}
 
-                _controllerType = value;
-                _controller = Activator.CreateInstance(_controllerType.Type!) as IUIController;
-                _controller?.Initialize(this);
+                 try
+                {
+                    _controllerType = value;
+                    _controller = Activator.CreateInstance(_controllerType.Type!) as IUIController;
+                    _controller?.Initialize(this);
+                }
+                catch (Exception e)
+                {
+                    _controller = null;
+                    _controllerType = ControllerType.Empty;
+                    Debug.LogWarning($"Failed to initialize Ulink Controller: {e}");
+                }
             }}
         }}
     }}
