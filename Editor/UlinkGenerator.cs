@@ -115,11 +115,11 @@ using UnityEngine.UIElements;
                 }}
 
                  try
-                {
+                {{
                     _controllerType = value;
                     _controller = Activator.CreateInstance(_controllerType.Type!) as IUIController;
                     _controller?.Initialize(this);
-                }
+                }}
                 catch (Exception e)
                 {
                     _controller = null;
