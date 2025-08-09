@@ -3,7 +3,7 @@ using UnityEditor.UIElements;
 
 namespace Ulink.Editor
 {
-    public class UxmlControllerAttributeConverter : UxmlAttributeConverter<ControllerType>
+    public class UxmlUlinkControllerAttributeConverter : UxmlAttributeConverter<ControllerType>
     {
         public override ControllerType FromString(string value) => string.IsNullOrEmpty(value)
             ? ControllerType.Empty

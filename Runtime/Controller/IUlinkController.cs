@@ -6,7 +6,7 @@ namespace Ulink.Runtime
     /// <summary>
     /// Interface for the Ulink framework.
     /// </summary>
-    public interface IUIController : IDisposable
+    public interface IUlinkController : IDisposable
     {
         /// <summary>
         /// Will run whenever it is assigned via the Builder

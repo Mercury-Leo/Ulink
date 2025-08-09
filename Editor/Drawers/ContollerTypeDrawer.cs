@@ -39,7 +39,7 @@ namespace Ulink.Editor
 
             var typeNameProp = property.FindPropertyRelative(nameof(ControllerType.TypeName));
 
-            var allTypes = TypeCache.GetTypesDerivedFrom<IUIController>().OrderBy(type => type.Name).ToList();
+            var allTypes = TypeCache.GetTypesDerivedFrom<IUlinkController>().OrderBy(type => type.Name).ToList();
 
             var filteredTypes = new List<Type> { null };
             filteredTypes.AddRange(allTypes);

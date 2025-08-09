@@ -39,7 +39,7 @@ namespace Ulink.Editor
 
             var uxmlElementTypes = new HashSet<Type>(TypeCache.GetTypesWithAttribute<UxmlElementAttribute>());
 
-            var controllerTypes = TypeCache.GetTypesWithAttribute<UlinkAttribute>()
+            var controllerTypes = TypeCache.GetTypesWithAttribute<UlinkControllerAttribute>()
                 .Where(type => type.IsClass
                                && !type.IsAbstract
                                && typeof(VisualElement).IsAssignableFrom(type)
@@ -185,7 +185,7 @@ using UnityEngine.UIElements;";
             return $@"{(string.IsNullOrEmpty(namespaceName) ? string.Empty : $"namespace {namespaceName}\n{{")}
     public partial class {className} 
     {{
-        private IUIController? _controller;
+        private IUlinkController? _controller;
         private ControllerType _controllerType;
 
         [UxmlAttribute]
@@ -204,7 +204,7 @@ using UnityEngine.UIElements;";
                 try
                 {{
                     _controllerType = value;
-                    _controller = Activator.CreateInstance(_controllerType.Type!) as IUIController;
+                    _controller = Activator.CreateInstance(_controllerType.Type!) as IUlinkController;
                     _controller?.Initialize(this);
                 }}
                 catch (Exception e)
