@@ -15,17 +15,16 @@ namespace Ulink.Editor
 
             var settings = UlinkSettings.instance;
 
-            rootElement.Add(Utility.CreateTitle("Ulink"));
+            rootElement.Add(ElementsUtility.CreateTitle("Ulink"));
 
-            var targetRow = Utility.CreateBrowseField("Target Folder", settings.TargetFolder,
+            var targetRow = ElementsUtility.CreateBrowseField("Target Folder", settings.TargetFolder,
                 "Where the generated class will be created at",
                 "Folder to create the generated controller files",
                 result => settings.TargetFolder = result);
 
             rootElement.Add(targetRow);
 
-            var generateButton =
-                Utility.CreateButton("Generate", UlinkGenerator.GenerateControllers, "Generate Controllers");
+            var generateButton = ElementsUtility.CreateButton("Generate", UlinkGenerator.GenerateControllers, "Generate Controllers");
 
             rootElement.Add(generateButton);
         }

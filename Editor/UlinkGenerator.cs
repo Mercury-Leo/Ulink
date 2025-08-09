@@ -3,8 +3,11 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text.RegularExpressions;
 using Ulink.Runtime;
 using UnityEditor;
+using UnityEditor.Compilation;
+using UnityEngine;
 using UnityEngine.UIElements;
 
 namespace Ulink.Editor
@@ -14,6 +17,8 @@ namespace Ulink.Editor
     {
         private const string GenerateFolder = "Generated/Controller";
         private const string AssetsPath = "Assets";
+        private const string UlinkFileName = "Ulink.g.cs";
+        private const int TemplateVersion = 1;
 
         static UlinkGenerator()
         {
@@ -33,68 +38,127 @@ namespace Ulink.Editor
 
             var controllerTypes = TypeCache.GetTypesWithAttribute<UlinkAttribute>()
                 .Where(type => type.IsClass
-                    && !type.IsAbstract
-                    && typeof(VisualElement).IsAssignableFrom(type)
-                    && uxmlElementTypes.Contains(type))
+                               && !type.IsAbstract
+                               && typeof(VisualElement).IsAssignableFrom(type)
+                               && uxmlElementTypes.Contains(type))
                 .GroupBy(type => type.FullName)
                 .Select(group => group.First())
                 .ToList();
 
+            var typeLookup = new Dictionary<string, List<Type>>();
+
             foreach (var type in controllerTypes)
             {
-                string namespaceName = type.Namespace ?? string.Empty;
-                string className = type.Name;
-
-                var scriptAssetPath = FindScriptAssetPath(type);
+                string? scriptAssetPath = FindScriptAssetPath(type);
                 if (string.IsNullOrEmpty(scriptAssetPath))
                 {
                     continue;
                 }
 
                 string rootPath = GetAssemblyRoot(scriptAssetPath!);
-                string generatedPath = Path.Combine(rootPath, GenerateFolder);
+                if (!typeLookup.TryGetValue(rootPath, out var types))
+                {
+                    types = new List<Type>();
+                    typeLookup[rootPath] = types;
+                }
 
-                if (!Directory.Exists(generatedPath))
-                    Directory.CreateDirectory(generatedPath);
+                types.Add(type);
+            }
 
-                string filePath = Path.Combine(generatedPath, $"{className}.g.cs");
+            var anyChanged = false;
 
-                if (File.Exists(filePath))
+            foreach ((string? key, var types) in typeLookup)
+            {
+                if (types.Count == 0)
                 {
                     continue;
                 }
 
-                string content = GenerateClass(className, namespaceName);
-                File.WriteAllText(filePath, content);
+                string generatedPath = Path.Combine(key, GenerateFolder);
+
+                if (!Directory.Exists(generatedPath))
+                {
+                    Directory.CreateDirectory(generatedPath);
+                }
+
+                string filePath = Path.Combine(generatedPath, UlinkFileName);
+
+                var sorted = types.OrderBy(type => type.Namespace).ThenBy(type => type.Name).ToList();
+
+                string newContent = BuildFileContent(sorted);
+
+                if (File.Exists(filePath))
+                {
+                    string previousContent = File.ReadAllText(filePath);
+                    if (string.Equals(previousContent, newContent, StringComparison.Ordinal))
+                    {
+                        continue;
+                    }
+                }
+
+                try
+                {
+                    string temp = filePath + ".tmp";
+                    File.WriteAllText(temp, newContent);
+                    if (File.Exists(filePath))
+                    {
+                        File.Replace(temp, filePath, null);
+                    }
+                    else
+                    {
+                        File.Move(temp, filePath);
+                    }
+                }
+                catch (Exception e)
+                {
+                    Debug.LogWarning($"[Ulink] Failed to create file for {key}: {e}.");
+                    continue;
+                }
+
+                anyChanged = true;
             }
 
-            AssetDatabase.Refresh();
+            if (anyChanged)
+            {
+                AssetDatabase.Refresh();
+            }
         }
 
-        private static string? FindScriptAssetPath(Type type)
+        private static string BuildFileContent(List<Type> types)
         {
-            var monoScripts = MonoImporter.GetAllRuntimeMonoScripts();
-            foreach (var script in monoScripts)
+            string manifest = string.Join("|", types.Select(type => type.FullName));
+            string manifestHash = HashingUtility.HashString(manifest) ?? "0";
+
+            var builder = new System.Text.StringBuilder();
+            builder.AppendLine("// Auto-generated by Ulink. Do not modify this file.");
+            builder.AppendLine($"// TemplateVersion: {TemplateVersion}");
+            builder.AppendLine($"// ManifestHash: {manifestHash}");
+            builder.AppendLine("#nullable enable");
+            builder.AppendLine(GenerateUsing());
+            builder.AppendLine();
+
+            foreach (var type in types)
             {
-                if (script.GetClass() == type)
-                {
-                    return AssetDatabase.GetAssetPath(script);
-                }
+                string ns = type.Namespace ?? string.Empty;
+                string className = type.Name;
+                builder.AppendLine(GenerateClass(className, ns));
             }
 
-            return null;
+            return builder.ToString().Replace("\r\n", "\n");
+        }
+
+        private static string GenerateUsing()
+        {
+            return @"
+using System;
+using Ulink.Runtime;
+using UnityEngine;
+using UnityEngine.UIElements;";
         }
 
         private static string GenerateClass(string className, string? namespaceName)
         {
-            return $@"// Auto-generated by Ulink. Do not modify this file.
-#nullable enable
-using System;
-using Ulink.Runtime;
-using UnityEngine;
-using UnityEngine.UIElements;
-
-{(string.IsNullOrEmpty(namespaceName) ? string.Empty : $"namespace {namespaceName}\n{{")}
+            return $@"{(string.IsNullOrEmpty(namespaceName) ? string.Empty : $"namespace {namespaceName}\n{{")}
     public partial class {className} 
     {{
         private IUIController? _controller;
@@ -152,6 +216,69 @@ using UnityEngine.UIElements;
             }
 
             return AssetsPath;
+        }
+
+        private static string? FindScriptAssetPath(Type type)
+        {
+            foreach (var script in MonoImporter.GetAllRuntimeMonoScripts())
+            {
+                if (script.GetClass() == type)
+                    return AssetDatabase.GetAssetPath(script);
+            }
+
+            string? asmName = type.Assembly.GetName().Name;
+            var asm = CompilationPipeline.GetAssemblies()
+                .FirstOrDefault(a => a.name == asmName);
+
+            if (asm == null)
+            {
+                return null;
+            }
+
+            string typeName = Regex.Escape(type.Name);
+            bool hasNs = !string.IsNullOrEmpty(type.Namespace);
+            string? ns = hasNs ? Regex.Escape(type.Namespace!) : null;
+
+            var classPattern = $@"\b(partial\s+)?class\s+{typeName}\b";
+            string nsScoped = hasNs
+                ? $@"\bnamespace\s+{ns}\b[\s\S]*?{{[\s\S]*?{classPattern}"
+                : classPattern;
+
+            var re = new Regex(nsScoped, RegexOptions.Multiline);
+
+            foreach (string? sourcePath in asm.sourceFiles)
+            {
+                try
+                {
+                    string text = File.ReadAllText(sourcePath);
+                    if (re.IsMatch(text))
+                        return sourcePath.Replace('\\', '/');
+                }
+                catch
+                {
+                    // Ignore
+                }
+            }
+
+            string[]? guids = AssetDatabase.FindAssets($"t:MonoScript {type.Name}");
+            foreach (string guid in guids)
+            {
+                string? path = AssetDatabase.GUIDToAssetPath(guid);
+                try
+                {
+                    string text = File.ReadAllText(path);
+                    if (re.IsMatch(text))
+                    {
+                        return path;
+                    }
+                }
+                catch
+                {
+                    // Ignore
+                }
+            }
+
+            return null;
         }
     }
 }

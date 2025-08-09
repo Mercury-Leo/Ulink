@@ -6,7 +6,7 @@ using UnityEngine.UIElements;
 
 namespace Ulink.Editor
 {
-    internal static class Utility
+    internal static class ElementsUtility
     {
         public static VisualElement CreateTitle(string title)
         {
