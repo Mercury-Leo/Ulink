@@ -45,6 +45,10 @@ namespace Ulink.Editor
                 .Select(group => group.First())
                 .ToList();
 
+            controllerTypes = controllerTypes.GroupBy(type => type.FullName).Select(group => group.First()).ToList();
+            var options = new HashSet<Type>(controllerTypes);
+            controllerTypes = controllerTypes.Where(type => !HasBaseClass(type, options)).ToList();
+
             var typeLookup = new Dictionary<string, List<Type>>();
 
             foreach (var type in controllerTypes)
@@ -216,6 +220,22 @@ using UnityEngine.UIElements;";
             }
 
             return AssetsPath;
+        }
+
+        private static bool HasBaseClass(Type type, HashSet<Type> options)
+        {
+            var baseClass = type.BaseType;
+            while (baseClass != null && baseClass != typeof(object) && baseClass != typeof(VisualElement))
+            {
+                if (options.Contains(baseClass))
+                {
+                    return true;
+                }
+
+                baseClass = baseClass.BaseType;
+            }
+
+            return false;
         }
 
         private static string? FindScriptAssetPath(Type type)
