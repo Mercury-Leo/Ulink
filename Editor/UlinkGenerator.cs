@@ -3,7 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Text.RegularExpressions;
+using System.Text;
 using Ulink.Runtime;
 using UnityEditor;
 using UnityEditor.Compilation;
@@ -20,9 +20,11 @@ namespace Ulink.Editor
         private const string UlinkFileName = "Ulink.g.cs";
         private const int TemplateVersion = 1;
 
+        private static readonly Dictionary<string, string> AssemblyRootByName = new();
+
         static UlinkGenerator()
         {
-            EditorApplication.delayCall += GenerateControllers;
+            CompilationPipeline.compilationFinished += _ => GenerateControllers();
         }
 
         [MenuItem("Tools/Leo's Tools/Ulink/Generate Controllers")]
@@ -31,10 +33,11 @@ namespace Ulink.Editor
             GenerateControllers(UlinkSettings.instance.TargetFolder);
         }
 
-        public static void GenerateControllers(string targetFolder)
+        public static void GenerateControllers(string _)
         {
-            var uxmlElementTypes = new HashSet<Type>(
-                TypeCache.GetTypesWithAttribute<UxmlElementAttribute>());
+            BuildAssemblyRootCache();
+
+            var uxmlElementTypes = new HashSet<Type>(TypeCache.GetTypesWithAttribute<UxmlElementAttribute>());
 
             var controllerTypes = TypeCache.GetTypesWithAttribute<UlinkAttribute>()
                 .Where(type => type.IsClass
@@ -45,50 +48,35 @@ namespace Ulink.Editor
                 .Select(group => group.First())
                 .ToList();
 
-            controllerTypes = controllerTypes.GroupBy(type => type.FullName).Select(group => group.First()).ToList();
             var options = new HashSet<Type>(controllerTypes);
             controllerTypes = controllerTypes.Where(type => !HasBaseClass(type, options)).ToList();
 
-            var typeLookup = new Dictionary<string, List<Type>>();
-
+            var byRoot = new Dictionary<string, List<Type>>();
             foreach (var type in controllerTypes)
             {
-                string? scriptAssetPath = FindScriptAssetPath(type);
-                if (string.IsNullOrEmpty(scriptAssetPath))
-                {
-                    continue;
-                }
-
-                string rootPath = GetAssemblyRoot(scriptAssetPath!);
-                if (!typeLookup.TryGetValue(rootPath, out var types))
-                {
-                    types = new List<Type>();
-                    typeLookup[rootPath] = types;
-                }
-
-                types.Add(type);
+                string asmName = type.Assembly.GetName().Name!;
+                string? root = AssemblyRootByName.GetValueOrDefault(asmName, AssetsPath);
+                (byRoot.TryGetValue(root, out var list) ? list : byRoot[root] = new List<Type>()).Add(type);
             }
 
             var anyChanged = false;
 
-            foreach ((string? key, var types) in typeLookup)
+            foreach ((string? root, var types) in byRoot)
             {
                 if (types.Count == 0)
                 {
                     continue;
                 }
 
-                string generatedPath = Path.Combine(key, GenerateFolder);
-
+                string generatedPath = Path.Combine(root, GenerateFolder).Replace('\\', '/');
                 if (!Directory.Exists(generatedPath))
                 {
                     Directory.CreateDirectory(generatedPath);
                 }
 
-                string filePath = Path.Combine(generatedPath, UlinkFileName);
+                string filePath = Path.Combine(generatedPath, UlinkFileName).Replace('\\', '/');
 
                 var sorted = types.OrderBy(type => type.Namespace).ThenBy(type => type.Name).ToList();
-
                 string newContent = BuildFileContent(sorted);
 
                 if (File.Exists(filePath))
@@ -103,7 +91,7 @@ namespace Ulink.Editor
                 try
                 {
                     string temp = filePath + ".tmp";
-                    File.WriteAllText(temp, newContent);
+                    File.WriteAllText(temp, newContent, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
                     if (File.Exists(filePath))
                     {
                         File.Replace(temp, filePath, null);
@@ -115,7 +103,7 @@ namespace Ulink.Editor
                 }
                 catch (Exception e)
                 {
-                    Debug.LogWarning($"[Ulink] Failed to create file for {key}: {e}.");
+                    Debug.LogWarning($"[Ulink] Failed to create file for {root}: {e}.");
                     continue;
                 }
 
@@ -128,12 +116,44 @@ namespace Ulink.Editor
             }
         }
 
+        private static void BuildAssemblyRootCache()
+        {
+            if (AssemblyRootByName.Count > 0)
+            {
+                return;
+            }
+
+            foreach (var assembly in CompilationPipeline.GetAssemblies())
+            {
+                string? name = assembly.name;
+                string root = AssetsPath;
+
+                try
+                {
+                    string? asmdefPath = CompilationPipeline.GetAssemblyDefinitionFilePathFromAssemblyName(name);
+                    if (!string.IsNullOrEmpty(asmdefPath))
+                    {
+                        root = Path.GetDirectoryName(asmdefPath)!.Replace('\\', '/');
+                    }
+                }
+                catch
+                {
+                    // ignore;
+                }
+
+                AssemblyRootByName[name] = root;
+            }
+
+            AssemblyRootByName.TryAdd("Assembly-CSharp", AssetsPath);
+            AssemblyRootByName.TryAdd("Assembly-CSharp-Editor", AssetsPath);
+        }
+
         private static string BuildFileContent(List<Type> types)
         {
             string manifest = string.Join("|", types.Select(type => type.FullName));
             string manifestHash = HashingUtility.HashString(manifest) ?? "0";
 
-            var builder = new System.Text.StringBuilder();
+            var builder = new StringBuilder();
             builder.AppendLine("// Auto-generated by Ulink. Do not modify this file.");
             builder.AppendLine($"// TemplateVersion: {TemplateVersion}");
             builder.AppendLine($"// ManifestHash: {manifestHash}");
@@ -166,7 +186,6 @@ using UnityEngine.UIElements;";
     public partial class {className} 
     {{
         private IUIController? _controller;
-
         private ControllerType _controllerType;
 
         [UxmlAttribute]
@@ -182,7 +201,7 @@ using UnityEngine.UIElements;";
                     return;
                 }}
 
-                 try
+                try
                 {{
                     _controllerType = value;
                     _controller = Activator.CreateInstance(_controllerType.Type!) as IUIController;
@@ -201,27 +220,6 @@ using UnityEngine.UIElements;";
 ";
         }
 
-        /// <summary>
-        /// Finds the root for the generated files
-        /// </summary>
-        /// <param name="scriptPath"></param>
-        /// <returns></returns>
-        private static string GetAssemblyRoot(string scriptPath)
-        {
-            string? directory = Path.GetDirectoryName(scriptPath);
-            while (!string.IsNullOrEmpty(directory) && directory != AssetsPath)
-            {
-                if (Directory.GetFiles(directory, "*.asmdef").Length > 0)
-                {
-                    return directory;
-                }
-
-                directory = Path.GetDirectoryName(directory);
-            }
-
-            return AssetsPath;
-        }
-
         private static bool HasBaseClass(Type type, HashSet<Type> options)
         {
             var baseClass = type.BaseType;
@@ -236,69 +234,6 @@ using UnityEngine.UIElements;";
             }
 
             return false;
-        }
-
-        private static string? FindScriptAssetPath(Type type)
-        {
-            foreach (var script in MonoImporter.GetAllRuntimeMonoScripts())
-            {
-                if (script.GetClass() == type)
-                    return AssetDatabase.GetAssetPath(script);
-            }
-
-            string? asmName = type.Assembly.GetName().Name;
-            var asm = CompilationPipeline.GetAssemblies()
-                .FirstOrDefault(a => a.name == asmName);
-
-            if (asm == null)
-            {
-                return null;
-            }
-
-            string typeName = Regex.Escape(type.Name);
-            bool hasNs = !string.IsNullOrEmpty(type.Namespace);
-            string? ns = hasNs ? Regex.Escape(type.Namespace!) : null;
-
-            var classPattern = $@"\b(partial\s+)?class\s+{typeName}\b";
-            string nsScoped = hasNs
-                ? $@"\bnamespace\s+{ns}\b[\s\S]*?{{[\s\S]*?{classPattern}"
-                : classPattern;
-
-            var re = new Regex(nsScoped, RegexOptions.Multiline);
-
-            foreach (string? sourcePath in asm.sourceFiles)
-            {
-                try
-                {
-                    string text = File.ReadAllText(sourcePath);
-                    if (re.IsMatch(text))
-                        return sourcePath.Replace('\\', '/');
-                }
-                catch
-                {
-                    // Ignore
-                }
-            }
-
-            string[]? guids = AssetDatabase.FindAssets($"t:MonoScript {type.Name}");
-            foreach (string guid in guids)
-            {
-                string? path = AssetDatabase.GUIDToAssetPath(guid);
-                try
-                {
-                    string text = File.ReadAllText(path);
-                    if (re.IsMatch(text))
-                    {
-                        return path;
-                    }
-                }
-                catch
-                {
-                    // Ignore
-                }
-            }
-
-            return null;
         }
     }
 }
