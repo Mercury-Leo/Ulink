@@ -30,36 +30,87 @@ namespace Ulink.Editor
         [MenuItem("Tools/Leo's Tools/Ulink/Generate Controllers")]
         public static void GenerateControllers()
         {
-            GenerateControllers(UlinkSettings.instance.TargetFolder);
+            Generate();
         }
 
-        public static void GenerateControllers(string _)
+        private static void Generate()
         {
             BuildAssemblyRootCache();
 
             var uxmlElementTypes = new HashSet<Type>(TypeCache.GetTypesWithAttribute<UxmlElementAttribute>());
 
-            var controllerTypes = TypeCache.GetTypesWithAttribute<UlinkAttribute>()
-                .Where(type => type.IsClass
-                               && !type.IsAbstract
-                               && typeof(VisualElement).IsAssignableFrom(type)
-                               && uxmlElementTypes.Contains(type))
-                .GroupBy(type => type.FullName)
-                .Select(group => group.First())
-                .ToList();
+            var outputByRoot = new Dictionary<string, StringBuilder>();
 
-            var options = new HashSet<Type>(controllerTypes);
-            controllerTypes = controllerTypes.Where(type => !HasBaseClass(type, options)).ToList();
+            AppendGeneratedBlocksFor<UlinkControllerAttribute>(uxmlElementTypes, outputByRoot,
+                BuildControllerFileContent);
 
-            var byRoot = new Dictionary<string, List<Type>>();
-            foreach (var type in controllerTypes)
-            {
-                string asmName = type.Assembly.GetName().Name!;
-                string? root = AssemblyRootByName.GetValueOrDefault(asmName, AssetsPath);
-                (byRoot.TryGetValue(root, out var list) ? list : byRoot[root] = new List<Type>()).Add(type);
-            }
+            AppendGeneratedBlocksFor<UlinkFactoryAttribute>(uxmlElementTypes, outputByRoot, BuildFactoryFileContent);
 
             var anyChanged = false;
+
+            foreach ((string? root, var builder) in outputByRoot)
+            {
+                anyChanged = WriteClassToFile(builder, root, anyChanged);
+            }
+
+            if (anyChanged)
+            {
+                AssetDatabase.Refresh();
+            }
+        }
+
+        private static bool WriteClassToFile(StringBuilder builder, string root, bool anyChanged)
+        {
+            string body = builder.ToString().Replace("\r\n", "\n");
+            string content = BuildFileHeader() + body;
+
+            string generatedPath = Path.Combine(root, GenerateFolder).Replace('\\', '/');
+            if (!Directory.Exists(generatedPath))
+            {
+                Directory.CreateDirectory(generatedPath);
+            }
+
+            string filePath = Path.Combine(generatedPath, UlinkFileName).Replace('\\', '/');
+
+            if (File.Exists(filePath))
+            {
+                string previous = File.ReadAllText(filePath);
+                if (string.Equals(previous, content, StringComparison.Ordinal))
+                {
+                    return anyChanged;
+                }
+            }
+
+            try
+            {
+                string temp = filePath + ".tmp";
+                File.WriteAllText(temp, content, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+
+                if (File.Exists(filePath))
+                {
+                    File.Replace(temp, filePath, null);
+                }
+                else
+                {
+                    File.Move(temp, filePath);
+                }
+
+                anyChanged = true;
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning($"[Ulink] Failed to create file for {root}: {e}.");
+            }
+
+            return anyChanged;
+        }
+
+        private static void AppendGeneratedBlocksFor<TAttribute>(HashSet<Type> uxmlElementTypes,
+            Dictionary<string, StringBuilder> outputByRoot, Func<List<Type>, string> buildBlockForTypes)
+            where TAttribute : Attribute
+        {
+            var eligible = FindEligibleTypes<TAttribute>(uxmlElementTypes);
+            var byRoot = GroupByAssemblyRoot(eligible);
 
             foreach ((string? root, var types) in byRoot)
             {
@@ -68,52 +119,59 @@ namespace Ulink.Editor
                     continue;
                 }
 
-                string generatedPath = Path.Combine(root, GenerateFolder).Replace('\\', '/');
-                if (!Directory.Exists(generatedPath))
-                {
-                    Directory.CreateDirectory(generatedPath);
-                }
-
-                string filePath = Path.Combine(generatedPath, UlinkFileName).Replace('\\', '/');
-
                 var sorted = types.OrderBy(type => type.Namespace).ThenBy(type => type.Name).ToList();
-                string newContent = BuildFileContent(sorted);
 
-                if (File.Exists(filePath))
-                {
-                    string previousContent = File.ReadAllText(filePath);
-                    if (string.Equals(previousContent, newContent, StringComparison.Ordinal))
-                    {
-                        continue;
-                    }
-                }
+                string? block = buildBlockForTypes(sorted);
 
-                try
+                if (string.IsNullOrEmpty(block))
                 {
-                    string temp = filePath + ".tmp";
-                    File.WriteAllText(temp, newContent, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
-                    if (File.Exists(filePath))
-                    {
-                        File.Replace(temp, filePath, null);
-                    }
-                    else
-                    {
-                        File.Move(temp, filePath);
-                    }
-                }
-                catch (Exception e)
-                {
-                    Debug.LogWarning($"[Ulink] Failed to create file for {root}: {e}.");
                     continue;
                 }
 
-                anyChanged = true;
+                if (!outputByRoot.TryGetValue(root, out var builder))
+                {
+                    builder = new StringBuilder();
+                    outputByRoot[root] = builder;
+                }
+
+                builder.Append(block);
+            }
+        }
+
+        private static Dictionary<string, List<Type>> GroupByAssemblyRoot(List<Type> types)
+        {
+            var dict = new Dictionary<string, List<Type>>();
+            foreach (var type in types)
+            {
+                string assemblyName = type.Assembly.GetName().Name!;
+                string? root = AssemblyRootByName.GetValueOrDefault(assemblyName, AssetsPath);
+                if (!dict.TryGetValue(root, out var list))
+                {
+                    list = new List<Type>();
+                    dict[root] = list;
+                }
+
+                list.Add(type);
             }
 
-            if (anyChanged)
-            {
-                AssetDatabase.Refresh();
-            }
+            return dict;
+        }
+
+        private static List<Type> FindEligibleTypes<TAttribute>(HashSet<Type> uxmlElementTypes)
+            where TAttribute : Attribute
+        {
+            var types = TypeCache.GetTypesWithAttribute<TAttribute>()
+                .Where(type =>
+                    type.IsClass &&
+                    !type.IsAbstract &&
+                    typeof(VisualElement).IsAssignableFrom(type) &&
+                    uxmlElementTypes.Contains(type))
+                .GroupBy(type => type.FullName)
+                .Select(g => g.First())
+                .ToList();
+
+            var options = new HashSet<Type>(types);
+            return types.Where(t => !HasBaseClass(t, options)).ToList();
         }
 
         private static void BuildAssemblyRootCache()
@@ -148,24 +206,39 @@ namespace Ulink.Editor
             AssemblyRootByName.TryAdd("Assembly-CSharp-Editor", AssetsPath);
         }
 
-        private static string BuildFileContent(List<Type> types)
+        private static string BuildFileHeader()
         {
-            string manifest = string.Join("|", types.Select(type => type.FullName));
-            string manifestHash = HashingUtility.HashString(manifest) ?? "0";
-
             var builder = new StringBuilder();
             builder.AppendLine("// Auto-generated by Ulink. Do not modify this file.");
             builder.AppendLine($"// TemplateVersion: {TemplateVersion}");
-            builder.AppendLine($"// ManifestHash: {manifestHash}");
             builder.AppendLine("#nullable enable");
             builder.AppendLine(GenerateUsing());
             builder.AppendLine();
 
+            return builder.ToString().Replace("\r\n", "\n");
+        }
+
+        private static string BuildControllerFileContent(List<Type> types)
+        {
+            var builder = new StringBuilder();
             foreach (var type in types)
             {
-                string ns = type.Namespace ?? string.Empty;
+                string namespaceName = type.Namespace ?? string.Empty;
                 string className = type.Name;
-                builder.AppendLine(GenerateClass(className, ns));
+                builder.AppendLine(GenerateControllerClass(className, namespaceName));
+            }
+
+            return builder.ToString().Replace("\r\n", "\n");
+        }
+
+        private static string BuildFactoryFileContent(List<Type> types)
+        {
+            var builder = new StringBuilder();
+            foreach (var type in types)
+            {
+                string namespaceName = type.Namespace ?? string.Empty;
+                string className = type.Name;
+                builder.AppendLine(GenerateFactoryClass(className, namespaceName));
             }
 
             return builder.ToString().Replace("\r\n", "\n");
@@ -180,12 +253,52 @@ using UnityEngine;
 using UnityEngine.UIElements;";
         }
 
-        private static string GenerateClass(string className, string? namespaceName)
+        private static string GenerateFactoryClass(string className, string namespaceName)
         {
-            return $@"{(string.IsNullOrEmpty(namespaceName) ? string.Empty : $"namespace {namespaceName}\n{{")}
+            return $@"{(string.IsNullOrEmpty(namespaceName) ? string.Empty : $"namespace {namespaceName}\n{{")} 
     public partial class {className} 
     {{
-        private IUIController? _controller;
+        private UlinkFactory _factory;
+        private IUlinkController _factoryController;
+
+        [UxmlAttribute]
+        private UlinkFactory Factory
+        {{
+            get => _factory;
+            set
+            {{
+                if (value == null)
+                {{
+                    _factory = null;
+                    _factoryController = null;
+                    return;
+                }}
+
+                try
+                {{
+                    _factory = value;
+                    _factoryController = _factory.CreateController();
+                    _factoryController.Initialize(this);
+                }}
+                catch (Exception e)
+                {{
+                    _factory = null;
+                    _factoryController = null;
+                    Debug.LogWarning($""[Ulink] Failed to initialize Ulink Factory: {{e}}"");
+                }}
+            }}
+        }}
+    }}
+{(string.IsNullOrEmpty(namespaceName) ? string.Empty : "}")}
+";
+        }
+
+        private static string GenerateControllerClass(string className, string? namespaceName)
+        {
+            return $@"{(string.IsNullOrEmpty(namespaceName) ? string.Empty : $"namespace {namespaceName}\n{{")}
+    public partial class {className}
+    {{
+        private IUlinkController? _controller;
         private ControllerType _controllerType;
 
         [UxmlAttribute]
@@ -204,14 +317,14 @@ using UnityEngine.UIElements;";
                 try
                 {{
                     _controllerType = value;
-                    _controller = Activator.CreateInstance(_controllerType.Type!) as IUIController;
+                    _controller = Activator.CreateInstance(_controllerType.Type!) as IUlinkController;
                     _controller?.Initialize(this);
                 }}
                 catch (Exception e)
                 {{
                     _controller = null;
                     _controllerType = ControllerType.Empty;
-                    Debug.LogWarning($""Failed to initialize Ulink Controller: {{e}}"");
+                    Debug.LogWarning($""[Ulink] Failed to initialize Ulink Controller: {{e}}"");
                 }}
             }}
         }}
