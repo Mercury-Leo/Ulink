@@ -39,157 +39,139 @@ namespace Ulink.Editor
 
             var uxmlElementTypes = new HashSet<Type>(TypeCache.GetTypesWithAttribute<UxmlElementAttribute>());
 
-            var controllerTypes = TypeCache.GetTypesWithAttribute<UlinkControllerAttribute>()
-                .Where(type => type.IsClass
-                    && !type.IsAbstract
-                    && typeof(VisualElement).IsAssignableFrom(type)
-                    && uxmlElementTypes.Contains(type))
-                .GroupBy(type => type.FullName)
-                .Select(group => group.First())
-                .ToList();
+            var outputByRoot = new Dictionary<string, StringBuilder>();
 
-            var controllerOptions = new HashSet<Type>(controllerTypes);
-            controllerTypes = controllerTypes
-                .Where(type => !HasBaseClass(type, controllerOptions)).ToList();
+            AppendGeneratedBlocksFor<UlinkControllerAttribute>(uxmlElementTypes, outputByRoot,
+                BuildControllerFileContent);
 
-            var factoryTypes = TypeCache.GetTypesWithAttribute<UlinkFactoryAttribute>()
-                .Where(type => type.IsClass
-                    && !type.IsAbstract
-                    && typeof(VisualElement).IsAssignableFrom(type)
-                    && uxmlElementTypes.Contains(type))
-                .GroupBy(type => type.FullName)
-                .Select(group => group.First())
-                .ToList();
-
-            var factoryOptions = new HashSet<Type>(factoryTypes);
-            factoryTypes = factoryTypes.Where(type => !HasBaseClass(type, factoryOptions)).ToList();
-
-            var controllerRoots = new Dictionary<string, List<Type>>();
-            foreach (var type in controllerTypes)
-            {
-                string assemblyName = type.Assembly.GetName().Name!;
-                string? root = AssemblyRootByName.GetValueOrDefault(assemblyName, AssetsPath);
-                (controllerRoots.TryGetValue(root, out var list) ? list : controllerRoots[root] = new List<Type>())
-                    .Add(type);
-            }
-
-            var factoryRoots = new Dictionary<string, List<Type>>();
-            foreach (var type in factoryTypes)
-            {
-                string assemblyName = type.Assembly.GetName().Name!;
-                string? root = AssemblyRootByName.GetValueOrDefault(assemblyName, AssetsPath);
-                (factoryRoots.TryGetValue(root, out var list) ? list : factoryRoots[root] = new List<Type>()).Add(type);
-            }
-
-            var controllerValues = new Dictionary<string, string>();
-
-            foreach ((string? root, var types) in controllerRoots)
-            {
-                if (types.Count == 0)
-                {
-                    continue;
-                }
-
-                string generatedPath = Path.Combine(root, GenerateFolder).Replace('\\', '/');
-                if (!Directory.Exists(generatedPath))
-                {
-                    Directory.CreateDirectory(generatedPath);
-                }
-
-                string filePath = Path.Combine(generatedPath, UlinkFileName).Replace('\\', '/');
-
-                var sorted = types.OrderBy(type => type.Namespace).ThenBy(type => type.Name).ToList();
-                string newContent = BuildControllerFileContent(sorted);
-
-                if (File.Exists(filePath))
-                {
-                    string previousContent = File.ReadAllText(filePath);
-                    if (string.Equals(previousContent, newContent, StringComparison.Ordinal))
-                    {
-                        continue;
-                    }
-                }
-
-                controllerValues[root] = newContent;
-            }
-
-            var factoryValues = new Dictionary<string, string>();
-
-            foreach ((string? root, var types) in factoryRoots)
-            {
-                if (types.Count == 0)
-                {
-                    continue;
-                }
-
-                string generatedPath = Path.Combine(root, GenerateFolder).Replace('\\', '/');
-                if (!Directory.Exists(generatedPath))
-                {
-                    Directory.CreateDirectory(generatedPath);
-                }
-
-                string filePath = Path.Combine(generatedPath, UlinkFileName).Replace('\\', '/');
-
-                var sorted = types.OrderBy(type => type.Namespace).ThenBy(type => type.Name).ToList();
-                string newContent = BuildFactoryFileContent(sorted);
-
-                if (File.Exists(filePath))
-                {
-                    string previousContent = File.ReadAllText(filePath);
-                    if (string.Equals(previousContent, newContent, StringComparison.Ordinal))
-                    {
-                        continue;
-                    }
-                }
-
-                factoryValues[root] = newContent;
-            }
-
-            // Merge the dicts
-            foreach ((string? root, string? types) in controllerValues)
-            {
-                factoryValues[root] += types;
-            }
+            AppendGeneratedBlocksFor<UlinkFactoryAttribute>(uxmlElementTypes, outputByRoot, BuildFactoryFileContent);
 
             var anyChanged = false;
 
-            foreach ((string? root, string? value) in factoryValues)
+            foreach ((string? root, var builder) in outputByRoot)
             {
-                string generatedPath = Path.Combine(root, GenerateFolder).Replace('\\', '/');
-                if (!Directory.Exists(generatedPath))
-                {
-                    Directory.CreateDirectory(generatedPath);
-                }
-
-                string filePath = Path.Combine(generatedPath, UlinkFileName).Replace('\\', '/');
-
-                try
-                {
-                    string temp = filePath + ".tmp";
-                    File.WriteAllText(temp, BuildFileHeader() + value,
-                        new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
-                    if (File.Exists(filePath))
-                    {
-                        File.Replace(temp, filePath, null);
-                    }
-                    else
-                    {
-                        File.Move(temp, filePath);
-                    }
-                }
-                catch (Exception e)
-                {
-                    Debug.LogWarning($"[Ulink] Failed to create file for {root}: {e}.");
-                    continue;
-                }
-
-                anyChanged = true;
+                anyChanged = WriteClassToFile(builder, root, anyChanged);
             }
 
             if (anyChanged)
             {
                 AssetDatabase.Refresh();
             }
+        }
+
+        private static bool WriteClassToFile(StringBuilder builder, string root, bool anyChanged)
+        {
+            string body = builder.ToString().Replace("\r\n", "\n");
+            string content = BuildFileHeader() + body;
+
+            string generatedPath = Path.Combine(root, GenerateFolder).Replace('\\', '/');
+            if (!Directory.Exists(generatedPath))
+            {
+                Directory.CreateDirectory(generatedPath);
+            }
+
+            string filePath = Path.Combine(generatedPath, UlinkFileName).Replace('\\', '/');
+
+            if (File.Exists(filePath))
+            {
+                string previous = File.ReadAllText(filePath);
+                if (string.Equals(previous, content, StringComparison.Ordinal))
+                {
+                    return anyChanged;
+                }
+            }
+
+            try
+            {
+                string temp = filePath + ".tmp";
+                File.WriteAllText(temp, content, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+
+                if (File.Exists(filePath))
+                {
+                    File.Replace(temp, filePath, null);
+                }
+                else
+                {
+                    File.Move(temp, filePath);
+                }
+
+                anyChanged = true;
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning($"[Ulink] Failed to create file for {root}: {e}.");
+            }
+
+            return anyChanged;
+        }
+
+        private static void AppendGeneratedBlocksFor<TAttribute>(HashSet<Type> uxmlElementTypes,
+            Dictionary<string, StringBuilder> outputByRoot, Func<List<Type>, string> buildBlockForTypes)
+            where TAttribute : Attribute
+        {
+            var eligible = FindEligibleTypes<TAttribute>(uxmlElementTypes);
+            var byRoot = GroupByAssemblyRoot(eligible);
+
+            foreach ((string? root, var types) in byRoot)
+            {
+                if (types.Count == 0)
+                {
+                    continue;
+                }
+
+                var sorted = types.OrderBy(type => type.Namespace).ThenBy(type => type.Name).ToList();
+
+                string? block = buildBlockForTypes(sorted);
+
+                if (string.IsNullOrEmpty(block))
+                {
+                    continue;
+                }
+
+                if (!outputByRoot.TryGetValue(root, out var builder))
+                {
+                    builder = new StringBuilder();
+                    outputByRoot[root] = builder;
+                }
+
+                builder.Append(block);
+            }
+        }
+
+        private static Dictionary<string, List<Type>> GroupByAssemblyRoot(List<Type> types)
+        {
+            var dict = new Dictionary<string, List<Type>>();
+            foreach (var type in types)
+            {
+                string assemblyName = type.Assembly.GetName().Name!;
+                string? root = AssemblyRootByName.GetValueOrDefault(assemblyName, AssetsPath);
+                if (!dict.TryGetValue(root, out var list))
+                {
+                    list = new List<Type>();
+                    dict[root] = list;
+                }
+
+                list.Add(type);
+            }
+
+            return dict;
+        }
+
+        private static List<Type> FindEligibleTypes<TAttribute>(HashSet<Type> uxmlElementTypes)
+            where TAttribute : Attribute
+        {
+            var types = TypeCache.GetTypesWithAttribute<TAttribute>()
+                .Where(type =>
+                    type.IsClass &&
+                    !type.IsAbstract &&
+                    typeof(VisualElement).IsAssignableFrom(type) &&
+                    uxmlElementTypes.Contains(type))
+                .GroupBy(type => type.FullName)
+                .Select(g => g.First())
+                .ToList();
+
+            var options = new HashSet<Type>(types);
+            return types.Where(t => !HasBaseClass(t, options)).ToList();
         }
 
         private static void BuildAssemblyRootCache()
