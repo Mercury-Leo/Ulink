@@ -267,6 +267,13 @@ using UnityEngine.UIElements;";
             get => _factory;
             set
             {{
+                if (_factoryController is not null)
+                {{
+                    UnregisterCallback<AttachToPanelEvent>(OnFactoryPanelAttach);
+                    UnregisterCallback<DetachFromPanelEvent>(OnFactoryPanelDetach);
+                    _factoryController.Unbind();
+                }}
+
                 if (value == null)
                 {{
                     _factory = null;
@@ -278,7 +285,15 @@ using UnityEngine.UIElements;";
                 {{
                     _factory = value;
                     _factoryController = _factory.CreateController();
-                    _factoryController.Initialize(this);
+                    _factoryController?.OnSerialize(this);
+
+                    if (panel != null)
+                    {{
+                        _factoryController?.Bind();
+                    }}
+
+                    RegisterCallback<AttachToPanelEvent>(OnFactoryPanelAttach);
+                    RegisterCallback<DetachFromPanelEvent>(OnFactoryPanelDetach);
                 }}
                 catch (Exception e)
                 {{
@@ -286,6 +301,22 @@ using UnityEngine.UIElements;";
                     _factoryController = null;
                     Debug.LogWarning($""[Ulink] Failed to initialize Ulink Factory: {{e}}"");
                 }}
+            }}
+        }}
+
+        private void OnFactoryPanelAttach(AttachToPanelEvent panelEvent)
+        {{
+            if(panelEvent.target == this)
+            {{
+                _factoryController?.Bind();
+            }}
+        }}
+
+        private void OnFactoryPanelDetach(DetachFromPanelEvent panelEvent)
+        {{
+            if(panelEvent.target == this)
+            {{
+                _factoryController?.Unbind();
             }}
         }}
     }}
@@ -307,6 +338,13 @@ using UnityEngine.UIElements;";
             get => _controllerType;
             set
             {{
+                if (_controller is not null)
+                {{
+                    UnregisterCallback<AttachToPanelEvent>(OnControllerPanelAttach);
+                    UnregisterCallback<DetachFromPanelEvent>(OnControllerPanelDetach);
+                    _controller.Unbind();
+                }}
+
                 if (value.Type == null)
                 {{
                     _controller = null;
@@ -316,9 +354,17 @@ using UnityEngine.UIElements;";
 
                 try
                 {{
-                    _controllerType = value;
+                     _controllerType = value;
                     _controller = Activator.CreateInstance(_controllerType.Type!) as IUlinkController;
-                    _controller?.Initialize(this);
+                    _controller?.OnSerialize(this);
+                    
+                    if (panel != null)
+                    {{
+                        _controller?.Bind();
+                    }}
+
+                    RegisterCallback<AttachToPanelEvent>(OnControllerPanelAttach);
+                    RegisterCallback<DetachFromPanelEvent>(OnControllerPanelDetach);
                 }}
                 catch (Exception e)
                 {{
@@ -326,6 +372,22 @@ using UnityEngine.UIElements;";
                     _controllerType = ControllerType.Empty;
                     Debug.LogWarning($""[Ulink] Failed to initialize Ulink Controller: {{e}}"");
                 }}
+            }}
+        }}
+
+        private void OnControllerPanelAttach(AttachToPanelEvent panelEvent)
+        {{
+            if(panelEvent.target == this)
+            {{
+                _controller?.Bind();
+            }}
+        }}
+
+        private void OnControllerPanelDetach(DetachFromPanelEvent panelEvent)
+        {{
+            if(panelEvent.target == this)
+            {{
+                _controller?.Unbind();
             }}
         }}
     }}

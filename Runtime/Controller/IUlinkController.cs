@@ -1,4 +1,3 @@
-using System;
 using UnityEngine.UIElements;
 
 namespace Ulink.Runtime
@@ -6,12 +5,11 @@ namespace Ulink.Runtime
     /// <summary>
     /// Interface for the Ulink framework.
     /// </summary>
-    public interface IUlinkController : IDisposable
+    public interface IUlinkController
     {
-        /// <summary>
-        /// Will run whenever it is assigned via the Builder
-        /// </summary>
-        /// <param name="element"></param>
-        void Initialize(VisualElement element);
+        void Bind();
+        void Unbind();
+
+        void OnSerialize(VisualElement element);
     }
 }
