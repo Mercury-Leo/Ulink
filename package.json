@@ -1,6 +1,6 @@
 {
   "name": "com.leosclockworks.ulink",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "displayName": "Ulink",
   "description": "Framework to inject controllers into Visual Elements",
   "keywords": [
