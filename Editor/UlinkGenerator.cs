@@ -267,12 +267,14 @@ using UnityEngine.UIElements;";
             get => _factory;
             set
             {{
+#if !UNITY_EDITOR || ULINK_EDITOR
                 if (_factoryController is not null)
                 {{
                     UnregisterCallback<AttachToPanelEvent>(OnFactoryPanelAttach);
                     UnregisterCallback<DetachFromPanelEvent>(OnFactoryPanelDetach);
                     _factoryController.Unbind();
                 }}
+#endif
 
                 if (value == null)
                 {{
@@ -284,6 +286,7 @@ using UnityEngine.UIElements;";
                 try
                 {{
                     _factory = value;
+#if !UNITY_EDITOR || ULINK_EDITOR
                     _factoryController = _factory.CreateController();
                     _factoryController?.OnSerialize(this);
 
@@ -294,6 +297,7 @@ using UnityEngine.UIElements;";
 
                     RegisterCallback<AttachToPanelEvent>(OnFactoryPanelAttach);
                     RegisterCallback<DetachFromPanelEvent>(OnFactoryPanelDetach);
+#endif
                 }}
                 catch (Exception e)
                 {{
@@ -304,6 +308,7 @@ using UnityEngine.UIElements;";
             }}
         }}
 
+#if !UNITY_EDITOR || ULINK_EDITOR
         private void OnFactoryPanelAttach(AttachToPanelEvent panelEvent)
         {{
             if(panelEvent.target == this)
@@ -319,6 +324,7 @@ using UnityEngine.UIElements;";
                 _factoryController?.Unbind();
             }}
         }}
+#endif
     }}
 {(string.IsNullOrEmpty(namespaceName) ? string.Empty : "}")}
 ";
@@ -338,12 +344,14 @@ using UnityEngine.UIElements;";
             get => _controllerType;
             set
             {{
+#if !UNITY_EDITOR || ULINK_EDITOR
                 if (_controller is not null)
                 {{
                     UnregisterCallback<AttachToPanelEvent>(OnControllerPanelAttach);
                     UnregisterCallback<DetachFromPanelEvent>(OnControllerPanelDetach);
                     _controller.Unbind();
                 }}
+#endif
 
                 if (value.Type == null)
                 {{
@@ -355,6 +363,7 @@ using UnityEngine.UIElements;";
                 try
                 {{
                      _controllerType = value;
+#if !UNITY_EDITOR || ULINK_EDITOR
                     _controller = Activator.CreateInstance(_controllerType.Type!) as IUlinkController;
                     _controller?.OnSerialize(this);
                     
@@ -365,6 +374,7 @@ using UnityEngine.UIElements;";
 
                     RegisterCallback<AttachToPanelEvent>(OnControllerPanelAttach);
                     RegisterCallback<DetachFromPanelEvent>(OnControllerPanelDetach);
+#endif
                 }}
                 catch (Exception e)
                 {{
@@ -375,6 +385,7 @@ using UnityEngine.UIElements;";
             }}
         }}
 
+#if !UNITY_EDITOR || ULINK_EDITOR
         private void OnControllerPanelAttach(AttachToPanelEvent panelEvent)
         {{
             if(panelEvent.target == this)
@@ -390,6 +401,7 @@ using UnityEngine.UIElements;";
                 _controller?.Unbind();
             }}
         }}
+#endif
     }}
 {(string.IsNullOrEmpty(namespaceName) ? string.Empty : "}")}
 ";
