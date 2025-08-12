@@ -17,14 +17,18 @@ namespace Ulink.Editor
 
             rootElement.Add(ElementsUtility.CreateTitle("Ulink"));
 
-            var targetRow = ElementsUtility.CreateBrowseField("Target Folder", settings.TargetFolder,
-                "Where the generated class will be created at",
-                "Folder to create the generated controller files",
-                result => settings.TargetFolder = result);
+            var runInEditor = new Toggle("Run In Editor")
+            {
+                value = settings.RunInEditor,
+                tooltip = "Toggles Ulink system in the Editor. Disable: Controllers will not run in the editor."
+            };
 
-            rootElement.Add(targetRow);
+            runInEditor.RegisterValueChangedCallback(value => UlinkSettings.instance.RunInEditor = value.newValue);
 
-            var generateButton = ElementsUtility.CreateButton("Generate", UlinkGenerator.GenerateControllers, "Generate Controllers");
+            rootElement.Add(runInEditor);
+
+            var generateButton =
+                ElementsUtility.CreateButton("Generate", UlinkGenerator.GenerateControllers, "Generate Controllers");
 
             rootElement.Add(generateButton);
         }

@@ -7,9 +7,9 @@ namespace Ulink.Runtime
     /// </summary>
     public interface IUlinkController
     {
+        public bool RuntimeOnly { get; } 
         void Bind();
         void Unbind();
-
         void OnSerialize(VisualElement element);
     }
 }
