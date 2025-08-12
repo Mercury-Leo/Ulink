@@ -1,6 +1,7 @@
 #nullable enable
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using UnityEditor;
 using UnityEditor.Build;
@@ -11,6 +12,7 @@ namespace Ulink.Editor
     [FilePath("ProjectSettings/Ulink.asset", FilePathAttribute.Location.ProjectFolder)]
     public class UlinkSettings : ScriptableSingleton<UlinkSettings>
     {
+        private const string AssetPath = "ProjectSettings/Ulink.asset";
         private const string UlinkSymbol = "ULINK_EDITOR";
 
         [SerializeField] private bool runInEditor = true;
@@ -31,9 +33,21 @@ namespace Ulink.Editor
             }
         }
 
+        private void OnEnable()
+        {
+            if (!File.Exists(AssetPath))
+            {
+                runInEditor = true;
+                Save(true);
+                AssetDatabase.SaveAssets();
+            }
+
+            DefineSymbolUtility.SetDefineSymbol(UlinkSymbol, runInEditor);
+        }
+
         private void Awake()
         {
-            DefineSymbolUtility.SetDefineSymbol(UlinkSymbol, RunInEditor);
+            DefineSymbolUtility.SetDefineSymbol(UlinkSymbol, runInEditor);
         }
 
         private void SaveDirty()
