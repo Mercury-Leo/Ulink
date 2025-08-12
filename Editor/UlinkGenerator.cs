@@ -270,9 +270,16 @@ using UnityEngine.UIElements;";
 #if !UNITY_EDITOR || ULINK_EDITOR
                 if (_factoryController is not null)
                 {{
-                    UnregisterCallback<AttachToPanelEvent>(OnFactoryPanelAttach);
-                    UnregisterCallback<DetachFromPanelEvent>(OnFactoryPanelDetach);
-                    _factoryController.Unbind();
+#if UNITY_EDITOR
+                    if (!_factoryController.RuntimeOnly)
+                    {{
+#endif
+                        UnregisterCallback<AttachToPanelEvent>(OnFactoryPanelAttach);
+                        UnregisterCallback<DetachFromPanelEvent>(OnFactoryPanelDetach);
+                        _factoryController.Unbind();
+#if UNITY_EDITOR
+                    }}
+#endif
                 }}
 #endif
 
@@ -288,6 +295,12 @@ using UnityEngine.UIElements;";
                     _factory = value;
 #if !UNITY_EDITOR || ULINK_EDITOR
                     _factoryController = _factory.CreateController();
+#if UNITY_EDITOR
+                    if (_factoryController?.RuntimeOnly ?? false)
+                    {{
+                        return;
+                    }}
+#endif
                     _factoryController?.OnSerialize(this);
 
                     if (panel != null)
@@ -347,9 +360,16 @@ using UnityEngine.UIElements;";
 #if !UNITY_EDITOR || ULINK_EDITOR
                 if (_controller is not null)
                 {{
-                    UnregisterCallback<AttachToPanelEvent>(OnControllerPanelAttach);
-                    UnregisterCallback<DetachFromPanelEvent>(OnControllerPanelDetach);
-                    _controller.Unbind();
+#if UNITY_EDITOR
+                    if (!_controller.RuntimeOnly)
+                    {{
+#endif
+                        UnregisterCallback<AttachToPanelEvent>(OnControllerPanelAttach);
+                        UnregisterCallback<DetachFromPanelEvent>(OnControllerPanelDetach);
+                        _controller.Unbind();
+#if UNITY_EDITOR
+                    }}
+#endif
                 }}
 #endif
 
@@ -365,6 +385,12 @@ using UnityEngine.UIElements;";
                      _controllerType = value;
 #if !UNITY_EDITOR || ULINK_EDITOR
                     _controller = Activator.CreateInstance(_controllerType.Type!) as IUlinkController;
+#if UNITY_EDITOR
+                    if (_controller?.RuntimeOnly ?? false)
+                    {{
+                        return;
+                    }}
+#endif
                     _controller?.OnSerialize(this);
                     
                     if (panel != null)
