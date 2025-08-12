@@ -8,8 +8,8 @@ namespace Ulink.Runtime
     public interface IUlinkController
     {
         public bool RuntimeOnly { get; } 
+        void OnSerialize(VisualElement element);
         void Bind();
         void Unbind();
-        void OnSerialize(VisualElement element);
     }
 }
