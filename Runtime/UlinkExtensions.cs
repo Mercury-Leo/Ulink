@@ -12,8 +12,8 @@ namespace Ulink.Runtime
         /// <param name="element"></param>
         public static void Initialize(this IUlinkController controller, VisualElement element)
         {
-            controller?.OnSerialize(element);
-            element?.RegisterCallbackOnce<AttachToPanelEvent>(_ => controller?.Bind());
+            controller?.Setup(element);
+            element?.RegisterCallbackOnce<AttachToPanelEvent>(_ => controller?.OnAttach());
         }
     }
 }

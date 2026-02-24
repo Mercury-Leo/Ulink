@@ -11,6 +11,6 @@ namespace Ulink.Runtime
 
         public Type? Type => string.IsNullOrEmpty(TypeName) ? null : Type.GetType(TypeName);
 
-        public static ControllerType Empty => new() { TypeName = string.Empty };
+        public static ControllerType Empty { get; } = new() { TypeName = string.Empty };
     }
 }

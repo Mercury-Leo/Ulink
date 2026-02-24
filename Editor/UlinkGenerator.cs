@@ -271,12 +271,12 @@ using UnityEngine.UIElements;";
                 if (_factoryController is not null)
                 {{
 #if UNITY_EDITOR
-                    if (!_factoryController.RuntimeOnly)
+                    if (!_factoryController.IsRuntimeOnly)
                     {{
 #endif
                         UnregisterCallback<AttachToPanelEvent>(OnFactoryPanelAttach);
                         UnregisterCallback<DetachFromPanelEvent>(OnFactoryPanelDetach);
-                        _factoryController.Unbind();
+                        _factoryController.OnDetach();
 #if UNITY_EDITOR
                     }}
 #endif
@@ -296,16 +296,16 @@ using UnityEngine.UIElements;";
 #if !UNITY_EDITOR || ULINK_EDITOR
                     _factoryController = _factory.CreateController();
 #if UNITY_EDITOR
-                    if (_factoryController?.RuntimeOnly ?? false)
+                    if (_factoryController?.IsRuntimeOnly ?? false)
                     {{
                         return;
                     }}
 #endif
-                    _factoryController?.OnSerialize(this);
+                    _factoryController?.Setup(this);
 
                     if (panel != null)
                     {{
-                        _factoryController?.Bind();
+                        _factoryController?.OnAttach();
                     }}
 
                     RegisterCallback<AttachToPanelEvent>(OnFactoryPanelAttach);
@@ -326,7 +326,7 @@ using UnityEngine.UIElements;";
         {{
             if(panelEvent.target == this)
             {{
-                _factoryController?.Bind();
+                _factoryController?.OnAttach();
             }}
         }}
 
@@ -334,7 +334,7 @@ using UnityEngine.UIElements;";
         {{
             if(panelEvent.target == this)
             {{
-                _factoryController?.Unbind();
+                _factoryController?.OnDetach();
             }}
         }}
 #endif
@@ -361,12 +361,12 @@ using UnityEngine.UIElements;";
                 if (_controller is not null)
                 {{
 #if UNITY_EDITOR
-                    if (!_controller.RuntimeOnly)
+                    if (!_controller.IsRuntimeOnly)
                     {{
 #endif
                         UnregisterCallback<AttachToPanelEvent>(OnControllerPanelAttach);
                         UnregisterCallback<DetachFromPanelEvent>(OnControllerPanelDetach);
-                        _controller.Unbind();
+                        _controller.OnDetach();
 #if UNITY_EDITOR
                     }}
 #endif
@@ -386,16 +386,16 @@ using UnityEngine.UIElements;";
 #if !UNITY_EDITOR || ULINK_EDITOR
                     _controller = Activator.CreateInstance(_controllerType.Type!) as IUlinkController;
 #if UNITY_EDITOR
-                    if (_controller?.RuntimeOnly ?? false)
+                    if (_controller?.IsRuntimeOnly ?? false)
                     {{
                         return;
                     }}
 #endif
-                    _controller?.OnSerialize(this);
+                    _controller?.Setup(this);
                     
                     if (panel != null)
                     {{
-                        _controller?.Bind();
+                        _controller?.OnAttach();
                     }}
 
                     RegisterCallback<AttachToPanelEvent>(OnControllerPanelAttach);
@@ -416,7 +416,7 @@ using UnityEngine.UIElements;";
         {{
             if(panelEvent.target == this)
             {{
-                _controller?.Bind();
+                _controller?.OnAttach();
             }}
         }}
 
@@ -424,7 +424,7 @@ using UnityEngine.UIElements;";
         {{
             if(panelEvent.target == this)
             {{
-                _controller?.Unbind();
+                _controller?.OnDetach();
             }}
         }}
 #endif
