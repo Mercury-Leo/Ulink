@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
+using System.Reflection;
 using Ulink.Runtime;
 using UnityEditor;
 using UnityEngine;
@@ -11,7 +13,7 @@ namespace Ulink.Editor
     [CustomPropertyDrawer(typeof(UlinkComponentsType))]
     public class UlinkComponentsDrawer : PropertyDrawer
     {
-        private const char Separator = ';';
+        private const char TypeSeparator = ';';
 
         public override VisualElement CreatePropertyGUI(SerializedProperty property)
         {
@@ -25,29 +27,25 @@ namespace Ulink.Editor
                 }
             };
 
+            // Single serialized property — TypeNamesRaw holds both type list and property data
             var rawProp = property.FindPropertyRelative(nameof(UlinkComponentsType.TypeNamesRaw));
 
             var allTypes = GetAllComponentTypes();
             var elementType = GetElementType();
             var exactMatchSet = elementType != null
-                ? new HashSet<Type>(allTypes.Where(t => IsExactMatch(t, elementType)))
+                ? new HashSet<Type>(allTypes.Where(type => IsExactMatch(type, elementType)))
                 : new HashSet<Type>();
             var compatibleSet = elementType != null
-                ? new HashSet<Type>(allTypes.Where(t => !exactMatchSet.Contains(t) && IsCompatibleComponent(t, elementType)))
+                ? new HashSet<Type>(allTypes.Where(type =>
+                    !exactMatchSet.Contains(type) && IsCompatibleComponent(type, elementType)))
                 : new HashSet<Type>();
-
-            string[] GetCurrentNames() => string.IsNullOrEmpty(rawProp.stringValue)
-                ? Array.Empty<string>()
-                : rawProp.stringValue.Split(Separator);
-
-            void SetNames(string[] names)
-            {
-                rawProp.stringValue = string.Join(Separator, names);
-                property.serializedObject.ApplyModifiedProperties();
-            }
 
             var listContainer = new VisualElement();
             container.Add(listContainer);
+
+            RebuildList();
+
+            // ── Search + add button ───────────────────────────────────────────
 
             var searchField = new TextField
             {
@@ -61,136 +59,276 @@ namespace Ulink.Editor
             var addButton = new Button { text = "Add Component", style = { flexGrow = 1, height = 20 } };
             container.Add(addButton);
 
-            void RebuildList()
-            {
-                listContainer.Clear();
-                var names = GetCurrentNames();
-                for (int i = 0; i < names.Length; i++)
-                {
-                    var index = i;
-                    var typeName = names[i];
-                    var resolvedType = allTypes.FirstOrDefault(t => t.AssemblyQualifiedName == typeName);
-
-                    var row = new VisualElement
-                    {
-                        style =
-                        {
-                            flexDirection = FlexDirection.Row,
-                            justifyContent = Justify.SpaceBetween,
-                            marginBottom = new StyleLength(new Length(2, LengthUnit.Pixel))
-                        }
-                    };
-
-                    string labelText;
-                    if (resolvedType != null)
-                    {
-                        if (exactMatchSet.Contains(resolvedType))
-                            labelText = $"★★ {resolvedType.Name}";
-                        else if (compatibleSet.Contains(resolvedType))
-                            labelText = $"★ {resolvedType.Name}";
-                        else
-                            labelText = resolvedType.Name;
-                    }
-                    else
-                    {
-                        labelText = typeName;
-                    }
-
-                    var label = new Label(labelText)
-                    {
-                        style = { flexGrow = 1, unityTextAlign = TextAnchor.MiddleLeft }
-                    };
-
-                    var removeButton = new Button(() =>
-                    {
-                        SetNames(GetCurrentNames().Where((_, j) => j != index).ToArray());
-                        RebuildList();
-                    })
-                    {
-                        text = "✕",
-                        style = { width = 20, height = 20 }
-                    };
-
-                    row.Add(label);
-                    row.Add(removeButton);
-                    listContainer.Add(row);
-                }
-            }
-
-            RebuildList();
-
             addButton.clicked += () =>
             {
-                var filter = searchField.value;
+                string filter = searchField.value;
                 var filtered = string.IsNullOrEmpty(filter)
                     ? allTypes
-                    : allTypes.Where(t => t.Name.IndexOf(filter, StringComparison.OrdinalIgnoreCase) >= 0).ToList();
+                    : allTypes.Where(type => type.Name.IndexOf(filter, StringComparison.OrdinalIgnoreCase) >= 0)
+                        .ToList();
 
                 var currentNames = new HashSet<string>(GetCurrentNames());
-
-                var exactAvailable     = filtered.Where(t => exactMatchSet.Contains(t)  && !currentNames.Contains(t.AssemblyQualifiedName)).ToList();
-                var compatibleAvailable = filtered.Where(t => compatibleSet.Contains(t)  && !currentNames.Contains(t.AssemblyQualifiedName)).ToList();
-                var incompatibleAll    = filtered.Where(t => !exactMatchSet.Contains(t) && !compatibleSet.Contains(t) && !currentNames.Contains(t.AssemblyQualifiedName)).ToList();
+                var exactAvail = filtered
+                    .Where(type => exactMatchSet.Contains(type) && !currentNames.Contains(type.AssemblyQualifiedName))
+                    .ToList();
+                var compatibleAvail = filtered
+                    .Where(type => compatibleSet.Contains(type) && !currentNames.Contains(type.AssemblyQualifiedName))
+                    .ToList();
+                var incompatibleAll = filtered.Where(t =>
+                    !exactMatchSet.Contains(t) && !compatibleSet.Contains(t) &&
+                    !currentNames.Contains(t.AssemblyQualifiedName)).ToList();
 
                 var menu = new GenericMenu();
 
-                foreach (var type in exactAvailable)
+                foreach (var type in exactAvail)
                 {
-                    var captured = type;
-                    menu.AddItem(new GUIContent($"★★ {captured.Name}"), false, () =>
+                    var componentType = type;
+                    menu.AddItem(new GUIContent($"★★ {componentType.Name}"), false, () =>
                     {
-                        var current = GetCurrentNames();
-                        if (!current.Contains(captured.AssemblyQualifiedName))
-                            SetNames(current.Append(captured.AssemblyQualifiedName).ToArray());
+                        string[] cur = GetCurrentNames();
+                        if (!cur.Contains(componentType.AssemblyQualifiedName))
+                            SetNames(cur.Append(componentType.AssemblyQualifiedName).ToArray());
                         RebuildList();
                     });
                 }
 
-                if (exactAvailable.Count > 0 && compatibleAvailable.Count > 0)
-                    menu.AddSeparator("");
+                if (exactAvail.Count > 0 && compatibleAvail.Count > 0)
+                    menu.AddSeparator(string.Empty);
 
-                foreach (var type in compatibleAvailable)
+                foreach (var type in compatibleAvail)
                 {
-                    var captured = type;
-                    menu.AddItem(new GUIContent($"★ {captured.Name}"), false, () =>
+                    var componentType = type;
+                    menu.AddItem(new GUIContent($"★ {componentType.Name}"), false, () =>
                     {
-                        var current = GetCurrentNames();
-                        if (!current.Contains(captured.AssemblyQualifiedName))
-                            SetNames(current.Append(captured.AssemblyQualifiedName).ToArray());
+                        string[] cur = GetCurrentNames();
+                        if (!cur.Contains(componentType.AssemblyQualifiedName))
+                            SetNames(cur.Append(componentType.AssemblyQualifiedName).ToArray());
                         RebuildList();
                     });
                 }
 
-                if (incompatibleAll.Count > 0 && (exactAvailable.Count > 0 || compatibleAvailable.Count > 0))
-                    menu.AddSeparator("");
+                if (incompatibleAll.Count > 0 && (exactAvail.Count > 0 || compatibleAvail.Count > 0))
+                    menu.AddSeparator(string.Empty);
 
                 foreach (var type in incompatibleAll)
                     menu.AddDisabledItem(new GUIContent(type.Name));
 
-                if (exactAvailable.Count + compatibleAvailable.Count + incompatibleAll.Count == 0)
+                if (exactAvail.Count + compatibleAvail.Count + incompatibleAll.Count == 0)
                     menu.AddDisabledItem(new GUIContent("No components available"));
 
                 menu.DropDown(addButton.worldBound);
             };
 
             return container;
+
+            // ── Raw string accessors ─────────────────────────────────────────
+
+            void WriteBack(string typesSection, string dataSection)
+            {
+                rawProp.stringValue = UlinkComponentsType.Combine(typesSection, dataSection);
+                property.serializedObject.ApplyModifiedProperties();
+            }
+
+            string RawData() => UlinkComponentsType.DataSection(rawProp.stringValue);
+
+            string[] GetCurrentNames()
+            {
+                string part = RawTypes();
+                return string.IsNullOrEmpty(part) ? Array.Empty<string>() : part.Split(TypeSeparator);
+            }
+
+            string RawTypes() => UlinkComponentsType.TypesSection(rawProp.stringValue);
+
+            // ── Component-list helpers ────────────────────────────────────────
+
+            void SetNames(string[] names) =>
+                WriteBack(string.Join(TypeSeparator.ToString(), names), RawData());
+
+            // ── Per-component property helpers ────────────────────────────────
+
+            void SetComponentPropertyValue(string aqn, string fieldName, string value)
+            {
+                var all = UlinkComponentsType.ParseAllData(rawProp.stringValue);
+                if (!all.ContainsKey(aqn)) all[aqn] = new Dictionary<string, string>();
+                all[aqn][fieldName] = value;
+                WriteBack(RawTypes(), UlinkComponentsType.SerializeAllData(all));
+            }
+
+            string GetStoredPropertyValue(string aqn, string fieldName)
+            {
+                var all = UlinkComponentsType.ParseAllData(rawProp.stringValue);
+                return all.TryGetValue(aqn, out var fields) && fields.TryGetValue(fieldName, out string value)
+                    ? value
+                    : string.Empty;
+            }
+
+            void RemoveComponentData(string aqn)
+            {
+                var all = UlinkComponentsType.ParseAllData(rawProp.stringValue);
+                if (all.Remove(aqn))
+                    WriteBack(RawTypes(), UlinkComponentsType.SerializeAllData(all));
+            }
+
+            // ── Property control factory ──────────────────────────────────────
+
+            VisualElement CreatePropertyControl(string aqn, FieldInfo field)
+            {
+                var row = new VisualElement
+                {
+                    style =
+                    {
+                        flexDirection = FlexDirection.Row,
+                        paddingLeft = new StyleLength(new Length(12, LengthUnit.Pixel)),
+                        marginBottom = new StyleLength(new Length(2, LengthUnit.Pixel))
+                    }
+                };
+
+                row.Add(new Label(ObjectNames.NicifyVariableName(field.Name))
+                {
+                    style = { width = 120, unityTextAlign = TextAnchor.MiddleLeft }
+                });
+
+                string current = GetStoredPropertyValue(aqn, field.Name);
+                var fieldType = field.FieldType;
+                VisualElement ctrl;
+
+                if (fieldType == typeof(int))
+                {
+                    int.TryParse(current, out int v);
+                    var f = new IntegerField { value = v, isDelayed = true, style = { flexGrow = 1 } };
+                    f.RegisterValueChangedCallback(evt =>
+                        SetComponentPropertyValue(aqn, field.Name, evt.newValue.ToString()));
+                    ctrl = f;
+                }
+                else if (fieldType == typeof(float))
+                {
+                    float.TryParse(current, NumberStyles.Float, CultureInfo.InvariantCulture, out var v);
+                    var f = new FloatField { value = v, isDelayed = true, style = { flexGrow = 1 } };
+                    f.RegisterValueChangedCallback(evt =>
+                        SetComponentPropertyValue(aqn, field.Name,
+                            evt.newValue.ToString(CultureInfo.InvariantCulture)));
+                    ctrl = f;
+                }
+                else if (fieldType == typeof(bool))
+                {
+                    bool.TryParse(current, out bool value);
+                    var f = new Toggle { value = value };
+                    f.RegisterValueChangedCallback(evt =>
+                        SetComponentPropertyValue(aqn, field.Name, evt.newValue.ToString()));
+                    ctrl = f;
+                }
+                else if (typeof(UnityEngine.Object).IsAssignableFrom(fieldType))
+                {
+                    var currentObj = string.IsNullOrEmpty(current)
+                        ? null
+                        : AssetDatabase.LoadAssetAtPath(current, fieldType);
+                    var f = new UnityEditor.UIElements.ObjectField
+                    {
+                        value = currentObj,
+                        objectType = fieldType,
+                        allowSceneObjects = false,
+                        style = { flexGrow = 1 }
+                    };
+                    f.RegisterValueChangedCallback(evt =>
+                    {
+                        string path = evt.newValue != null ? AssetDatabase.GetAssetPath(evt.newValue) : string.Empty;
+                        SetComponentPropertyValue(aqn, field.Name, path);
+                    });
+                    ctrl = f;
+                }
+                else
+                {
+                    var f = new TextField { value = current, isDelayed = true, style = { flexGrow = 1 } };
+                    f.RegisterValueChangedCallback(evt =>
+                        SetComponentPropertyValue(aqn, field.Name, evt.newValue));
+                    ctrl = f;
+                }
+
+                row.Add(ctrl);
+                return row;
+            }
+
+            // ── List ──────────────────────────────────────────────────────────
+
+            void RebuildList()
+            {
+                listContainer.Clear();
+                string[] names = GetCurrentNames();
+
+                for (var i = 0; i < names.Length; i++)
+                {
+                    int index = i;
+                    string typeName = names[i];
+                    var resolved = allTypes.FirstOrDefault(type => type.AssemblyQualifiedName == typeName);
+
+                    var section = new VisualElement
+                    {
+                        style = { marginBottom = new StyleLength(new Length(4, LengthUnit.Pixel)) }
+                    };
+
+                    // Header row
+                    var row = new VisualElement
+                    {
+                        style = { flexDirection = FlexDirection.Row, justifyContent = Justify.SpaceBetween }
+                    };
+
+                    string labelText;
+                    if (resolved != null)
+                    {
+                        if (exactMatchSet.Contains(resolved)) labelText = $"★★ {resolved.Name}";
+                        else if (compatibleSet.Contains(resolved)) labelText = $"★ {resolved.Name}";
+                        else labelText = resolved.Name;
+                    }
+                    else
+                    {
+                        labelText = typeName;
+                    }
+
+                    row.Add(new Label(labelText)
+                    {
+                        style = { flexGrow = 1, unityTextAlign = TextAnchor.MiddleLeft }
+                    });
+
+                    row.Add(new Button(() =>
+                    {
+                        SetNames(GetCurrentNames().Where((_, j) => j != index).ToArray());
+                        RemoveComponentData(typeName);
+                        RebuildList();
+                    })
+                    {
+                        text = "✕",
+                        style = { width = 20, height = 20 }
+                    });
+
+                    section.Add(row);
+
+                    // [UlinkProperty] fields
+                    if (resolved != null)
+                    {
+                        foreach (var field in GetUlinkPropertyFields(resolved))
+                            section.Add(CreatePropertyControl(typeName, field));
+                    }
+
+                    listContainer.Add(section);
+                }
+            }
         }
+
+        // ── Static helpers ────────────────────────────────────────────────────
+
+        private static List<FieldInfo> GetUlinkPropertyFields(Type componentType) =>
+            componentType
+                .GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
+                .Where(f => f.GetCustomAttribute<UlinkPropertyAttribute>() != null)
+                .ToList();
 
         private Type GetElementType()
         {
             var declaringType = fieldInfo?.DeclaringType;
             if (declaringType == null) return null;
-
-            // Direct: field declared inside a VisualElement subclass
-            if (typeof(VisualElement).IsAssignableFrom(declaringType))
-                return declaringType;
-
-            // Nested: field is inside a generated nested class (e.g. UxmlSerializedData)
-            // whose outer type is the actual VisualElement subclass
-            var outerType = declaringType.DeclaringType;
-            if (outerType != null && typeof(VisualElement).IsAssignableFrom(outerType))
-                return outerType;
-
+            if (typeof(VisualElement).IsAssignableFrom(declaringType)) return declaringType;
+            var outer = declaringType.DeclaringType;
+            if (outer != null && typeof(VisualElement).IsAssignableFrom(outer)) return outer;
             return null;
         }
 
@@ -201,10 +339,10 @@ namespace Ulink.Editor
 
             foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
             {
-                var assemblyName = assembly.GetName().Name ?? string.Empty;
-                if (assemblyName.StartsWith("Unity") || assemblyName.StartsWith("System") ||
-                    assemblyName.StartsWith("mscorlib") || assemblyName.StartsWith("Mono") ||
-                    assemblyName.StartsWith("netstandard"))
+                string name = assembly.GetName().Name ?? string.Empty;
+                if (name.StartsWith("Unity") || name.StartsWith("System") ||
+                    name.StartsWith("mscorlib") || name.StartsWith("Mono") ||
+                    name.StartsWith("netstandard"))
                     continue;
 
                 try
@@ -217,28 +355,26 @@ namespace Ulink.Editor
                             result.Add(type);
                     }
                 }
-                catch { /* skip inaccessible assemblies */ }
+                catch { }
             }
 
-            return result.OrderBy(t => t.Name).ToList();
+            return result.OrderBy(type => type.Name).ToList();
         }
 
         private static bool IsCompatibleComponent(Type componentType, Type elementType)
         {
-            var genericInterface = typeof(IUlinkComponent<>);
-            return componentType.GetInterfaces()
-                .Any(i => i.IsGenericType &&
-                          i.GetGenericTypeDefinition() == genericInterface &&
-                          i.GetGenericArguments()[0].IsAssignableFrom(elementType));
+            var gi = typeof(IUlinkComponent<>);
+            return componentType.GetInterfaces().Any(i =>
+                i.IsGenericType && i.GetGenericTypeDefinition() == gi &&
+                i.GetGenericArguments()[0].IsAssignableFrom(elementType));
         }
 
         private static bool IsExactMatch(Type componentType, Type elementType)
         {
-            var genericInterface = typeof(IUlinkComponent<>);
-            return componentType.GetInterfaces()
-                .Any(i => i.IsGenericType &&
-                          i.GetGenericTypeDefinition() == genericInterface &&
-                          i.GetGenericArguments()[0] == elementType);
+            var gi = typeof(IUlinkComponent<>);
+            return componentType.GetInterfaces().Any(i =>
+                i.IsGenericType && i.GetGenericTypeDefinition() == gi &&
+                i.GetGenericArguments()[0] == elementType);
         }
     }
 }

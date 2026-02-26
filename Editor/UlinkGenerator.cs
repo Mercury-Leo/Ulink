@@ -193,7 +193,7 @@ namespace Ulink.Editor
                 }
                 catch
                 {
-                    // ignore;
+                    // ignore
                 }
 
                 AssemblyRootByName[name] = root;
@@ -211,32 +211,6 @@ namespace Ulink.Editor
             builder.AppendLine("#nullable enable");
             builder.AppendLine(GenerateUsing());
             builder.AppendLine();
-
-            return builder.ToString().Replace("\r\n", "\n");
-        }
-
-        private static string BuildControllerFileContent(List<Type> types)
-        {
-            var builder = new StringBuilder();
-            foreach (var type in types)
-            {
-                string namespaceName = type.Namespace ?? string.Empty;
-                string className = type.Name;
-                builder.AppendLine(GenerateControllerClass(className, namespaceName));
-            }
-
-            return builder.ToString().Replace("\r\n", "\n");
-        }
-
-        private static string BuildFactoryFileContent(List<Type> types)
-        {
-            var builder = new StringBuilder();
-            foreach (var type in types)
-            {
-                string namespaceName = type.Namespace ?? string.Empty;
-                string className = type.Name;
-                builder.AppendLine(GenerateFactoryClass(className, namespaceName));
-            }
 
             return builder.ToString().Replace("\r\n", "\n");
         }
@@ -317,6 +291,8 @@ namespace Ulink.Editor
                         if (instanceType != null) _typedComponents.Add(instanceType);
                         else _baseComponents.Add(baseComp!);
 
+                        UlinkPropertyInjector.Inject(instance!, value, type.AssemblyQualifiedName);
+
                         instanceType?.Setup(this);
                         baseComp?.Setup(this);
                     }}
@@ -376,8 +352,8 @@ using UnityEngine.UIElements;";
 
         private static string GenerateFactoryClass(string className, string namespaceName)
         {
-            return $@"{(string.IsNullOrEmpty(namespaceName) ? string.Empty : $"namespace {namespaceName}\n{{")} 
-    public partial class {className} 
+            return $@"{(string.IsNullOrEmpty(namespaceName) ? string.Empty : $"namespace {namespaceName}\n{{")}
+    public partial class {className}
     {{
         private UlinkFactory _factory;
         private IUlinkController _factoryController;
