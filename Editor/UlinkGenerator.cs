@@ -41,10 +41,7 @@ namespace Ulink.Editor
 
             var outputByRoot = new Dictionary<string, StringBuilder>();
 
-            AppendGeneratedBlocksFor<UlinkControllerAttribute>(uxmlElementTypes, outputByRoot,
-                BuildControllerFileContent);
-
-            AppendGeneratedBlocksFor<UlinkFactoryAttribute>(uxmlElementTypes, outputByRoot, BuildFactoryFileContent);
+            AppendGeneratedBlocksFor<UlinkElementAttribute>(uxmlElementTypes, outputByRoot, BuildComponentsFileContent);
 
             var anyChanged = false;
 
@@ -244,10 +241,134 @@ namespace Ulink.Editor
             return builder.ToString().Replace("\r\n", "\n");
         }
 
+        private static string BuildComponentsFileContent(List<Type> types)
+        {
+            var builder = new StringBuilder();
+            foreach (var type in types)
+            {
+                string namespaceName = type.Namespace ?? string.Empty;
+                string className = type.Name;
+                builder.AppendLine(GenerateComponentsClass(className, namespaceName));
+            }
+
+            return builder.ToString().Replace("\r\n", "\n");
+        }
+
+        private static string GenerateComponentsClass(string className, string? namespaceName)
+        {
+            return $@"{(string.IsNullOrEmpty(namespaceName) ? string.Empty : $"namespace {namespaceName}\n{{")}
+    public partial class {className}
+    {{
+        private UlinkComponentsType _componentsType;
+        private readonly List<IUlinkComponent<{className}>> _typedComponents = new();
+        private readonly List<IUlinkComponent<VisualElement>> _baseComponents = new();
+
+        [UxmlAttribute(""ulink-components"")]
+        private UlinkComponentsType ComponentsType
+        {{
+            get => _componentsType;
+            set
+            {{
+                // Reset components
+#if !UNITY_EDITOR || ULINK_EDITOR
+                if (_typedComponents.Count > 0 || _baseComponents.Count > 0)
+                {{
+#if UNITY_EDITOR
+                    if (!(_typedComponents.Exists(component => !component.IsRuntimeOnly) ||
+                        _baseComponents.Exists(c => !c.IsRuntimeOnly)))
+                    {{
+#endif
+                        UnregisterCallback<AttachToPanelEvent>(OnComponentsPanelAttach);
+                        UnregisterCallback<DetachFromPanelEvent>(OnComponentsPanelDetach);
+                        foreach (var component in _typedComponents) component.OnDetach();
+                        foreach (var component in _baseComponents) component.OnDetach();
+#if UNITY_EDITOR
+                    }}
+#endif
+                }}
+#endif
+
+                _typedComponents.Clear();
+                _baseComponents.Clear();
+
+                if (string.IsNullOrEmpty(value.TypeNamesRaw))
+                {{
+                    _componentsType = UlinkComponentsType.Empty;
+                    return;
+                }}
+
+                try
+                {{
+                    _componentsType = value;
+#if !UNITY_EDITOR || ULINK_EDITOR
+                    foreach (var type in value.Types)
+                    {{
+                        if (type == null) continue;
+
+                        object? instance = Activator.CreateInstance(type);
+                        var instanceType = instance as IUlinkComponent<{className}>;
+                        var baseComp = instanceType == null ? instance as IUlinkComponent<VisualElement> : null;
+
+                        if (instanceType == null && baseComp == null) continue;
+
+#if UNITY_EDITOR
+                        if (instanceType?.IsRuntimeOnly ?? baseComp?.IsRuntimeOnly ?? false) continue;
+#endif
+                        if (instanceType != null) _typedComponents.Add(instanceType);
+                        else _baseComponents.Add(baseComp!);
+
+                        instanceType?.Setup(this);
+                        baseComp?.Setup(this);
+                    }}
+
+                    if (panel != null)
+                    {{
+                        foreach (var component in _typedComponents) component.OnAttach();
+                        foreach (var component in _baseComponents) component.OnAttach();
+                    }}
+
+                    if (_typedComponents.Count > 0 || _baseComponents.Count > 0)
+                    {{
+                        RegisterCallback<AttachToPanelEvent>(OnComponentsPanelAttach);
+                        RegisterCallback<DetachFromPanelEvent>(OnComponentsPanelDetach);
+                    }}
+#endif
+                }}
+                catch (Exception e)
+                {{
+                    _typedComponents.Clear();
+                    _baseComponents.Clear();
+                    _componentsType = UlinkComponentsType.Empty;
+                    Debug.LogWarning($""[Ulink] Failed to initialize Ulink Components: {{e}}"");
+                }}
+            }}
+        }}
+
+#if !UNITY_EDITOR || ULINK_EDITOR
+        private void OnComponentsPanelAttach(AttachToPanelEvent panelEvent)
+        {{
+            if (panelEvent.target != this) return;
+            foreach (var component in _typedComponents) component.OnAttach();
+            foreach (var component in _baseComponents) component.OnAttach();
+        }}
+
+        private void OnComponentsPanelDetach(DetachFromPanelEvent panelEvent)
+        {{
+            if (panelEvent.target != this) return;
+            foreach (var component in _typedComponents) component.OnDetach();
+            foreach (var component in _baseComponents) component.OnDetach();
+        }}
+#endif
+    }}
+{(string.IsNullOrEmpty(namespaceName) ? string.Empty : "}")}
+";
+        }
+
         private static string GenerateUsing()
         {
             return @"
 using System;
+using System.Collections.Generic;
 using Ulink.Runtime;
 using UnityEngine;
 using UnityEngine.UIElements;";
@@ -348,54 +469,63 @@ using UnityEngine.UIElements;";
             return $@"{(string.IsNullOrEmpty(namespaceName) ? string.Empty : $"namespace {namespaceName}\n{{")}
     public partial class {className}
     {{
-        private IUlinkController? _controller;
-        private ControllerType _controllerType;
+        private IUlinkController<{className}>? _typedController;
+        private IUlinkController<VisualElement>? _baseController;
+        private {nameof(UlinkControllerType)} _controllerType;
 
         [UxmlAttribute]
-        private ControllerType ControllerType
+        private {nameof(UlinkControllerType)} ControllerType
         {{
             get => _controllerType;
             set
             {{
 #if !UNITY_EDITOR || ULINK_EDITOR
-                if (_controller is not null)
+                if (_typedController != null || _baseController != null)
                 {{
 #if UNITY_EDITOR
-                    if (!_controller.IsRuntimeOnly)
+                    if (!(_typedController?.IsRuntimeOnly ?? _baseController?.IsRuntimeOnly ?? false))
                     {{
 #endif
                         UnregisterCallback<AttachToPanelEvent>(OnControllerPanelAttach);
                         UnregisterCallback<DetachFromPanelEvent>(OnControllerPanelDetach);
-                        _controller.OnDetach();
+                        _typedController?.OnDetach();
+                        _baseController?.OnDetach();
 #if UNITY_EDITOR
                     }}
 #endif
                 }}
 #endif
 
+                _typedController = null;
+                _baseController = null;
+
                 if (value.Type == null)
                 {{
-                    _controller = null;
-                    _controllerType = ControllerType.Empty;
+                    _controllerType = {nameof(UlinkControllerType)}.Empty;
                     return;
                 }}
 
                 try
                 {{
-                     _controllerType = value;
+                    _controllerType = value;
 #if !UNITY_EDITOR || ULINK_EDITOR
-                    _controller = Activator.CreateInstance(_controllerType.Type!) as IUlinkController;
+                    var instance = Activator.CreateInstance(_controllerType.Type!);
+                    _typedController = instance as IUlinkController<{className}>;
+                    _baseController = _typedController == null ? instance as IUlinkController<VisualElement> : null;
+
 #if UNITY_EDITOR
-                    if (_controller?.IsRuntimeOnly ?? false)
+                    if (_typedController?.IsRuntimeOnly ?? _baseController?.IsRuntimeOnly ?? false)
                     {{
                         return;
                     }}
 #endif
-                    _controller?.Setup(this);
-                    
+                    _typedController?.Setup(this);
+                    _baseController?.Setup(this);
+
                     if (panel != null)
                     {{
-                        _controller?.OnAttach();
+                        _typedController?.OnAttach();
+                        _baseController?.OnAttach();
                     }}
 
                     RegisterCallback<AttachToPanelEvent>(OnControllerPanelAttach);
@@ -404,8 +534,9 @@ using UnityEngine.UIElements;";
                 }}
                 catch (Exception e)
                 {{
-                    _controller = null;
-                    _controllerType = ControllerType.Empty;
+                    _typedController = null;
+                    _baseController = null;
+                    _controllerType = {nameof(UlinkControllerType)}.Empty;
                     Debug.LogWarning($""[Ulink] Failed to initialize Ulink Controller: {{e}}"");
                 }}
             }}
@@ -416,7 +547,8 @@ using UnityEngine.UIElements;";
         {{
             if(panelEvent.target == this)
             {{
-                _controller?.OnAttach();
+                _typedController?.OnAttach();
+                _baseController?.OnAttach();
             }}
         }}
 
@@ -424,7 +556,8 @@ using UnityEngine.UIElements;";
         {{
             if(panelEvent.target == this)
             {{
-                _controller?.OnDetach();
+                _typedController?.OnDetach();
+                _baseController?.OnDetach();
             }}
         }}
 #endif

@@ -14,6 +14,14 @@ namespace Ulink.Runtime
         {
             controller?.Setup(element);
             element?.RegisterCallbackOnce<AttachToPanelEvent>(_ => controller?.OnAttach());
+            element?.RegisterCallbackOnce<DetachFromPanelEvent>(_ => controller?.OnDetach());
+        }
+
+        public static void Initialize<T>(this IUlinkComponent<T> component, T element) where T : VisualElement
+        {
+            component?.Setup(element);
+            element?.RegisterCallbackOnce<AttachToPanelEvent>(_ => component?.OnAttach());
+            element?.RegisterCallbackOnce<DetachFromPanelEvent>(_ => component?.OnDetach());
         }
     }
 }

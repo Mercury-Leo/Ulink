@@ -5,12 +5,12 @@ using UnityEditor.UIElements;
 namespace Ulink.Editor
 {
     [UsedImplicitly]
-    public class UxmlUlinkControllerAttributeConverter : UxmlAttributeConverter<ControllerType>
+    public class UxmlUlinkControllerAttributeConverter : UxmlAttributeConverter<UlinkControllerType>
     {
-        public override ControllerType FromString(string value) => string.IsNullOrEmpty(value)
-            ? ControllerType.Empty
-            : new ControllerType { TypeName = value };
+        public override UlinkControllerType FromString(string value) => string.IsNullOrEmpty(value)
+            ? UlinkControllerType.Empty
+            : new UlinkControllerType { TypeName = value };
 
-        public override string ToString(ControllerType value) => value.TypeName;
+        public override string ToString(UlinkControllerType value) => value.TypeName;
     }
 }
