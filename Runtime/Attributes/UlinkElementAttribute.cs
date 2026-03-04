@@ -6,7 +6,7 @@ namespace Ulink.Runtime
     public sealed class UlinkElementAttribute : Attribute
     {
         /// <summary>
-        /// Marks this Visual Element to generate a <see cref="IUlinkController"/> partial class
+        /// Marks this Visual Element to generate a <see cref="IUlinkComponent"/> partial class
         /// </summary>
         public UlinkElementAttribute() { }
     }

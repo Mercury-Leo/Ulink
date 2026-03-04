@@ -20,7 +20,7 @@ namespace Ulink.Editor
             var runInEditor = new Toggle("Run In Editor")
             {
                 value = settings.RunInEditor,
-                tooltip = "Toggles Ulink system in the Editor. Disable: Controllers will not run in the editor."
+                tooltip = "Toggles Ulink system in the Editor. Disable: Components will not run in the editor."
             };
 
             runInEditor.RegisterValueChangedCallback(value => UlinkSettings.instance.RunInEditor = value.newValue);
@@ -28,7 +28,7 @@ namespace Ulink.Editor
             rootElement.Add(runInEditor);
 
             var generateButton =
-                ElementsUtility.CreateButton("Generate", UlinkGenerator.GenerateControllers, "Generate Controllers");
+                ElementsUtility.CreateButton("Generate", UlinkGenerator.GenerateControllers, "Generate Components");
 
             rootElement.Add(generateButton);
         }

@@ -9,7 +9,6 @@ namespace Ulink.Editor
     {
         public override UlinkComponentsType FromString(string value) => new() { TypeNamesRaw = value ?? string.Empty };
 
-        public override string ToString(UlinkComponentsType value) =>
-            value.TypeNamesRaw ?? string.Empty;
+        public override string ToString(UlinkComponentsType value) => value.TypeNamesRaw ?? string.Empty;
     }
 }

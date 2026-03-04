@@ -17,14 +17,11 @@ namespace Ulink.Editor
 
         public override VisualElement CreatePropertyGUI(SerializedProperty property)
         {
-            var container = new VisualElement
+            var foldout = new Foldout
             {
-                style =
-                {
-                    flexDirection = FlexDirection.Column,
-                    paddingTop = new StyleLength(new Length(4, LengthUnit.Pixel)),
-                    paddingBottom = new StyleLength(new Length(4, LengthUnit.Pixel))
-                }
+                text = "Ulink",
+                value = true,
+                viewDataKey = $"ulink-components-foldout-{property.propertyPath}"
             };
 
             // Single serialized property — TypeNamesRaw holds both type list and property data
@@ -41,7 +38,7 @@ namespace Ulink.Editor
                 : new HashSet<Type>();
 
             var listContainer = new VisualElement();
-            container.Add(listContainer);
+            foldout.Add(listContainer);
 
             RebuildList();
 
@@ -54,10 +51,10 @@ namespace Ulink.Editor
                 textEdition = { placeholder = "Search Components" },
                 style = { marginBottom = new StyleLength(new Length(4, LengthUnit.Pixel)) }
             };
-            container.Add(searchField);
+            foldout.Add(searchField);
 
             var addButton = new Button { text = "Add Component", style = { flexGrow = 1, height = 20 } };
-            container.Add(addButton);
+            foldout.Add(addButton);
 
             addButton.clicked += () =>
             {
@@ -119,7 +116,7 @@ namespace Ulink.Editor
                 menu.DropDown(addButton.worldBound);
             };
 
-            return container;
+            return foldout;
 
             // ── Raw string accessors ─────────────────────────────────────────
 

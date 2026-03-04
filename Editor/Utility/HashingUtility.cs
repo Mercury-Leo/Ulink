@@ -9,10 +9,10 @@ namespace Ulink.Editor
 
         public static string HashString(string content)
         {
-            var hash = FnvOffsetBasis;
-            var bytes = Encoding.UTF8.GetBytes(content);
+            ulong hash = FnvOffsetBasis;
+            byte[] bytes = Encoding.UTF8.GetBytes(content);
 
-            foreach (var input in bytes)
+            foreach (byte input in bytes)
             {
                 hash ^= input;
                 hash *= FnvPrime;
