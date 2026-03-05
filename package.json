@@ -1,8 +1,8 @@
 {
   "name": "com.leosclockworks.ulink",
-  "version": "0.7.1",
+  "version": "0.8.0",
   "displayName": "Ulink",
-  "description": "Framework to inject controllers into Visual Elements",
+  "description": "Framework to inject components into Visual Elements",
   "keywords": [
     "UIToolKit",
 	"Visual Element"
