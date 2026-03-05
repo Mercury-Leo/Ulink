@@ -38,15 +38,9 @@ namespace Ulink.Editor
             if (!File.Exists(AssetPath))
             {
                 runInEditor = true;
-                Save(true);
-                AssetDatabase.SaveAssets();
+                SaveDirty();
             }
 
-            DefineSymbolUtility.SetDefineSymbol(UlinkSymbol, runInEditor);
-        }
-
-        private void Awake()
-        {
             DefineSymbolUtility.SetDefineSymbol(UlinkSymbol, runInEditor);
         }
 

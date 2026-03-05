@@ -30,7 +30,7 @@ namespace Ulink.Editor
         [MenuItem("Tools/Leo's Tools/Ulink/Generate Controllers")]
         public static void GenerateControllers()
         {
-            Generate();
+           Generate();
         }
 
         private static void Generate()
@@ -41,10 +41,7 @@ namespace Ulink.Editor
 
             var outputByRoot = new Dictionary<string, StringBuilder>();
 
-            AppendGeneratedBlocksFor<UlinkControllerAttribute>(uxmlElementTypes, outputByRoot,
-                BuildControllerFileContent);
-
-            AppendGeneratedBlocksFor<UlinkFactoryAttribute>(uxmlElementTypes, outputByRoot, BuildFactoryFileContent);
+            AppendGeneratedBlocksFor<UlinkElementAttribute>(uxmlElementTypes, outputByRoot, BuildComponentsFileContent);
 
             var anyChanged = false;
 
@@ -196,7 +193,7 @@ namespace Ulink.Editor
                 }
                 catch
                 {
-                    // ignore;
+                    // ignore
                 }
 
                 AssemblyRootByName[name] = root;
@@ -218,219 +215,139 @@ namespace Ulink.Editor
             return builder.ToString().Replace("\r\n", "\n");
         }
 
-        private static string BuildControllerFileContent(List<Type> types)
+        private static string BuildComponentsFileContent(List<Type> types)
         {
             var builder = new StringBuilder();
             foreach (var type in types)
             {
                 string namespaceName = type.Namespace ?? string.Empty;
                 string className = type.Name;
-                builder.AppendLine(GenerateControllerClass(className, namespaceName));
+                builder.AppendLine(GenerateComponentsClass(className, namespaceName));
             }
 
             return builder.ToString().Replace("\r\n", "\n");
         }
 
-        private static string BuildFactoryFileContent(List<Type> types)
+        private static string GenerateComponentsClass(string className, string? namespaceName)
         {
-            var builder = new StringBuilder();
-            foreach (var type in types)
-            {
-                string namespaceName = type.Namespace ?? string.Empty;
-                string className = type.Name;
-                builder.AppendLine(GenerateFactoryClass(className, namespaceName));
-            }
+            return $@"{(string.IsNullOrEmpty(namespaceName) ? string.Empty : $"namespace {namespaceName}\n{{")}
+    public partial class {className}
+    {{
+        private UlinkComponentsType _componentsType;
+        private readonly List<IUlinkComponent<{className}>> _typedComponents = new();
+        private readonly List<IUlinkComponent<VisualElement>> _baseComponents = new();
 
-            return builder.ToString().Replace("\r\n", "\n");
+        [UxmlAttribute(""ulink-components"")]
+        private UlinkComponentsType ComponentsType
+        {{
+            get => _componentsType;
+            set
+            {{
+                // Reset components
+#if !UNITY_EDITOR || ULINK_EDITOR
+                if (_typedComponents.Count > 0 || _baseComponents.Count > 0)
+                {{
+#if UNITY_EDITOR
+                    if (!(_typedComponents.Exists(component => !component.GetType().IsDefined(typeof(UlinkRuntimeAttribute), false)) ||
+                        _baseComponents.Exists(component => !component.GetType().IsDefined(typeof(UlinkRuntimeAttribute), false))))
+                    {{
+#endif
+                        UnregisterCallback<AttachToPanelEvent>(OnComponentsPanelAttach);
+                        UnregisterCallback<DetachFromPanelEvent>(OnComponentsPanelDetach);
+                        foreach (var component in _typedComponents) component.OnDetach();
+                        foreach (var component in _baseComponents) component.OnDetach();
+#if UNITY_EDITOR
+                    }}
+#endif
+                }}
+#endif
+
+                _typedComponents.Clear();
+                _baseComponents.Clear();
+
+                if (string.IsNullOrEmpty(value.TypeNamesRaw))
+                {{
+                    _componentsType = UlinkComponentsType.Empty;
+                    return;
+                }}
+
+                try
+                {{
+                    _componentsType = value;
+#if !UNITY_EDITOR || ULINK_EDITOR
+                    foreach (var type in value.Types)
+                    {{
+                        if (type == null) continue;
+
+                        object? instance = Activator.CreateInstance(type);
+                        var instanceType = instance as IUlinkComponent<{className}>;
+                        var baseComp = instanceType == null ? instance as IUlinkComponent<VisualElement> : null;
+
+                        if (instanceType == null && baseComp == null) continue;
+
+#if UNITY_EDITOR
+                        if (type.IsDefined(typeof(UlinkRuntimeAttribute), false)) continue;
+#endif
+                        if (instanceType != null) _typedComponents.Add(instanceType);
+                        else _baseComponents.Add(baseComp!);
+
+                        UlinkPropertyInjector.Inject(instance!, value, type.AssemblyQualifiedName);
+
+                        instanceType?.Setup(this);
+                        baseComp?.Setup(this);
+                    }}
+
+                    if (panel != null)
+                    {{
+                        foreach (var component in _typedComponents) component.OnAttach();
+                        foreach (var component in _baseComponents) component.OnAttach();
+                    }}
+
+                    if (_typedComponents.Count > 0 || _baseComponents.Count > 0)
+                    {{
+                        RegisterCallback<AttachToPanelEvent>(OnComponentsPanelAttach);
+                        RegisterCallback<DetachFromPanelEvent>(OnComponentsPanelDetach);
+                    }}
+#endif
+                }}
+                catch (Exception e)
+                {{
+                    _typedComponents.Clear();
+                    _baseComponents.Clear();
+                    _componentsType = UlinkComponentsType.Empty;
+                    Debug.LogWarning($""[Ulink] Failed to initialize Ulink Components: {{e}}"");
+                }}
+            }}
+        }}
+
+#if !UNITY_EDITOR || ULINK_EDITOR
+        private void OnComponentsPanelAttach(AttachToPanelEvent panelEvent)
+        {{
+            if (panelEvent.target != this) return;
+            foreach (var component in _typedComponents) component.OnAttach();
+            foreach (var component in _baseComponents) component.OnAttach();
+        }}
+
+        private void OnComponentsPanelDetach(DetachFromPanelEvent panelEvent)
+        {{
+            if (panelEvent.target != this) return;
+            foreach (var component in _typedComponents) component.OnDetach();
+            foreach (var component in _baseComponents) component.OnDetach();
+        }}
+#endif
+    }}
+{(string.IsNullOrEmpty(namespaceName) ? string.Empty : "}")}
+";
         }
 
         private static string GenerateUsing()
         {
             return @"
 using System;
+using System.Collections.Generic;
 using Ulink.Runtime;
 using UnityEngine;
 using UnityEngine.UIElements;";
-        }
-
-        private static string GenerateFactoryClass(string className, string namespaceName)
-        {
-            return $@"{(string.IsNullOrEmpty(namespaceName) ? string.Empty : $"namespace {namespaceName}\n{{")} 
-    public partial class {className} 
-    {{
-        private UlinkFactory _factory;
-        private IUlinkController _factoryController;
-
-        [UxmlAttribute]
-        private UlinkFactory Factory
-        {{
-            get => _factory;
-            set
-            {{
-#if !UNITY_EDITOR || ULINK_EDITOR
-                if (_factoryController is not null)
-                {{
-#if UNITY_EDITOR
-                    if (!_factoryController.RuntimeOnly)
-                    {{
-#endif
-                        UnregisterCallback<AttachToPanelEvent>(OnFactoryPanelAttach);
-                        UnregisterCallback<DetachFromPanelEvent>(OnFactoryPanelDetach);
-                        _factoryController.Unbind();
-#if UNITY_EDITOR
-                    }}
-#endif
-                }}
-#endif
-
-                if (value == null)
-                {{
-                    _factory = null;
-                    _factoryController = null;
-                    return;
-                }}
-
-                try
-                {{
-                    _factory = value;
-#if !UNITY_EDITOR || ULINK_EDITOR
-                    _factoryController = _factory.CreateController();
-#if UNITY_EDITOR
-                    if (_factoryController?.RuntimeOnly ?? false)
-                    {{
-                        return;
-                    }}
-#endif
-                    _factoryController?.OnSerialize(this);
-
-                    if (panel != null)
-                    {{
-                        _factoryController?.Bind();
-                    }}
-
-                    RegisterCallback<AttachToPanelEvent>(OnFactoryPanelAttach);
-                    RegisterCallback<DetachFromPanelEvent>(OnFactoryPanelDetach);
-#endif
-                }}
-                catch (Exception e)
-                {{
-                    _factory = null;
-                    _factoryController = null;
-                    Debug.LogWarning($""[Ulink] Failed to initialize Ulink Factory: {{e}}"");
-                }}
-            }}
-        }}
-
-#if !UNITY_EDITOR || ULINK_EDITOR
-        private void OnFactoryPanelAttach(AttachToPanelEvent panelEvent)
-        {{
-            if(panelEvent.target == this)
-            {{
-                _factoryController?.Bind();
-            }}
-        }}
-
-        private void OnFactoryPanelDetach(DetachFromPanelEvent panelEvent)
-        {{
-            if(panelEvent.target == this)
-            {{
-                _factoryController?.Unbind();
-            }}
-        }}
-#endif
-    }}
-{(string.IsNullOrEmpty(namespaceName) ? string.Empty : "}")}
-";
-        }
-
-        private static string GenerateControllerClass(string className, string? namespaceName)
-        {
-            return $@"{(string.IsNullOrEmpty(namespaceName) ? string.Empty : $"namespace {namespaceName}\n{{")}
-    public partial class {className}
-    {{
-        private IUlinkController? _controller;
-        private ControllerType _controllerType;
-
-        [UxmlAttribute]
-        private ControllerType ControllerType
-        {{
-            get => _controllerType;
-            set
-            {{
-#if !UNITY_EDITOR || ULINK_EDITOR
-                if (_controller is not null)
-                {{
-#if UNITY_EDITOR
-                    if (!_controller.RuntimeOnly)
-                    {{
-#endif
-                        UnregisterCallback<AttachToPanelEvent>(OnControllerPanelAttach);
-                        UnregisterCallback<DetachFromPanelEvent>(OnControllerPanelDetach);
-                        _controller.Unbind();
-#if UNITY_EDITOR
-                    }}
-#endif
-                }}
-#endif
-
-                if (value.Type == null)
-                {{
-                    _controller = null;
-                    _controllerType = ControllerType.Empty;
-                    return;
-                }}
-
-                try
-                {{
-                     _controllerType = value;
-#if !UNITY_EDITOR || ULINK_EDITOR
-                    _controller = Activator.CreateInstance(_controllerType.Type!) as IUlinkController;
-#if UNITY_EDITOR
-                    if (_controller?.RuntimeOnly ?? false)
-                    {{
-                        return;
-                    }}
-#endif
-                    _controller?.OnSerialize(this);
-                    
-                    if (panel != null)
-                    {{
-                        _controller?.Bind();
-                    }}
-
-                    RegisterCallback<AttachToPanelEvent>(OnControllerPanelAttach);
-                    RegisterCallback<DetachFromPanelEvent>(OnControllerPanelDetach);
-#endif
-                }}
-                catch (Exception e)
-                {{
-                    _controller = null;
-                    _controllerType = ControllerType.Empty;
-                    Debug.LogWarning($""[Ulink] Failed to initialize Ulink Controller: {{e}}"");
-                }}
-            }}
-        }}
-
-#if !UNITY_EDITOR || ULINK_EDITOR
-        private void OnControllerPanelAttach(AttachToPanelEvent panelEvent)
-        {{
-            if(panelEvent.target == this)
-            {{
-                _controller?.Bind();
-            }}
-        }}
-
-        private void OnControllerPanelDetach(DetachFromPanelEvent panelEvent)
-        {{
-            if(panelEvent.target == this)
-            {{
-                _controller?.Unbind();
-            }}
-        }}
-#endif
-    }}
-{(string.IsNullOrEmpty(namespaceName) ? string.Empty : "}")}
-";
         }
 
         private static bool HasBaseClass(Type type, HashSet<Type> options)
