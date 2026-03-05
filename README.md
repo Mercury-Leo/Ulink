@@ -31,6 +31,18 @@ Ulink lets you attach reusable logic components to UI elements defined in UXML. 
 
 ---
 
+## Installation
+
+1. Open Unity's **Package Manager** (Window → Package Manager).
+2. Click the **'+'** button and choose **"Add package from Git URL…"**.
+3. Enter the GitHub URL:
+   ```
+   https://github.com/Mercury-Leo/Ulink.git
+   ```
+4. Click **Add Package**. Unity will fetch and install Ulink into your project.
+
+---
+
 ## Usage
 
 ### 1. Create a Component
@@ -196,15 +208,10 @@ By default, components run both at runtime and in the Editor.
 
 ---
 
-## Installation
+## Known Issues
 
-1. Open Unity's **Package Manager** (Window → Package Manager).
-2. Click the **'+'** button and choose **"Add package from Git URL…"**.
-3. Enter the GitHub URL:
-   ```
-   https://github.com/Mercury-Leo/Ulink.git
-   ```
-4. Click **Add Package**. Unity will fetch and install Ulink into your project.
+1. Changing a component's path will result in a lose of serialization. Looking into ways to fix this.
+2. Generates one big file for each assembly definition. Looking for a solution with a source generator, non trivial.
 
 ---
 
