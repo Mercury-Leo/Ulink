@@ -8,8 +8,7 @@ namespace Ulink.Runtime
     /// <summary>
     /// Reads [UlinkProperty] fields on a component instance and populates them from
     /// the data stored in a UlinkComponentsType before the component's Setup is called.
-    /// Prefers calling Update_{FieldName}(value) if the method exists, otherwise sets
-    /// the backing field directly.
+    /// Sets the backing field directly.
     /// </summary>
     public static class UlinkPropertyInjector
     {
@@ -22,38 +21,21 @@ namespace Ulink.Runtime
 
             var type = instance.GetType();
 
-            foreach (var field in type.GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic))
+            var fields = type.GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+            foreach (var field in fields)
             {
                 if (field.GetCustomAttribute<UlinkPropertyAttribute>() == null) continue;
+
                 if (!data.TryGetValue(field.Name, out string? rawValue)) continue;
 
-                var updateMethod = type.GetMethod(
-                    $"Update_{field.Name}",
-                    BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
-
-                if (updateMethod != null && updateMethod.GetParameters().Length == 1)
+                try
                 {
-                    try
-                    {
-                        object? converted = ConvertValue(rawValue, updateMethod.GetParameters()[0].ParameterType);
-                        if (converted != null) updateMethod.Invoke(instance, new[] { converted });
-                    }
-                    catch
-                    {
-                        /* skip on conversion or invocation failure */
-                    }
+                    object? converted = ConvertValue(rawValue, field.FieldType);
+                    if (converted != null) field.SetValue(instance, converted);
                 }
-                else
+                catch
                 {
-                    try
-                    {
-                        object? converted = ConvertValue(rawValue, field.FieldType);
-                        if (converted != null) field.SetValue(instance, converted);
-                    }
-                    catch
-                    {
-                        /* skip on conversion or set failure */
-                    }
+                    /* skip on conversion or set failure */
                 }
             }
         }

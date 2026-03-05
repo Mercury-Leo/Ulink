@@ -17,9 +17,9 @@ namespace Ulink.Runtime
         //   "{aqn1};{aqn2}\uE000{component-data-section}"
         private const char TypeSeparator = ';'; // between AQNs (plain ASCII, valid XML)
         private const char SectionSeparator = '\uE000'; // between types section and data section
-        internal const char ComponentSeparator = '\uE001'; // between per-component entries in data section
-        internal const char DataSeparator = '\uE002'; // between AQN and its field data
-        internal const char FieldSeparator = '\uE003'; // between individual field=value pairs
+        private const char ComponentSeparator = '\uE001'; // between per-component entries in data section
+        private const char DataSeparator = '\uE002'; // between AQN and its field data
+        private const char FieldSeparator = '\uE003'; // between individual field=value pairs
 
         [SerializeField] public string TypeNamesRaw;
 

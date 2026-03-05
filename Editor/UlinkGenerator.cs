@@ -249,7 +249,7 @@ namespace Ulink.Editor
                 {{
 #if UNITY_EDITOR
                     if (!(_typedComponents.Exists(component => component is not IUlinkRuntimeOnly) ||
-                        _baseComponents.Exists(c => c is not IUlinkRuntimeOnly)))
+                        _baseComponents.Exists(component => component is not IUlinkRuntimeOnly)))
                     {{
 #endif
                         UnregisterCallback<AttachToPanelEvent>(OnComponentsPanelAttach);

@@ -25,7 +25,7 @@ namespace Ulink.Editor
             };
 
             // Single serialized property — TypeNamesRaw holds both type list and property data
-            var rawProp = property.FindPropertyRelative(nameof(UlinkComponentsType.TypeNamesRaw));
+            var rawProperty = property.FindPropertyRelative(nameof(UlinkComponentsType.TypeNamesRaw));
 
             var allTypes = GetAllComponentTypes();
             var elementType = GetElementType();
@@ -122,11 +122,11 @@ namespace Ulink.Editor
 
             void WriteBack(string typesSection, string dataSection)
             {
-                rawProp.stringValue = UlinkComponentsType.Combine(typesSection, dataSection);
+                rawProperty.stringValue = UlinkComponentsType.Combine(typesSection, dataSection);
                 property.serializedObject.ApplyModifiedProperties();
             }
 
-            string RawData() => UlinkComponentsType.DataSection(rawProp.stringValue);
+            string RawData() => UlinkComponentsType.DataSection(rawProperty.stringValue);
 
             string[] GetCurrentNames()
             {
@@ -134,7 +134,7 @@ namespace Ulink.Editor
                 return string.IsNullOrEmpty(part) ? Array.Empty<string>() : part.Split(TypeSeparator);
             }
 
-            string RawTypes() => UlinkComponentsType.TypesSection(rawProp.stringValue);
+            string RawTypes() => UlinkComponentsType.TypesSection(rawProperty.stringValue);
 
             // ── Component-list helpers ────────────────────────────────────────
 
@@ -145,7 +145,7 @@ namespace Ulink.Editor
 
             void SetComponentPropertyValue(string aqn, string fieldName, string value)
             {
-                var all = UlinkComponentsType.ParseAllData(rawProp.stringValue);
+                var all = UlinkComponentsType.ParseAllData(rawProperty.stringValue);
                 if (!all.ContainsKey(aqn)) all[aqn] = new Dictionary<string, string>();
                 all[aqn][fieldName] = value;
                 WriteBack(RawTypes(), UlinkComponentsType.SerializeAllData(all));
@@ -153,7 +153,7 @@ namespace Ulink.Editor
 
             string GetStoredPropertyValue(string aqn, string fieldName)
             {
-                var all = UlinkComponentsType.ParseAllData(rawProp.stringValue);
+                var all = UlinkComponentsType.ParseAllData(rawProperty.stringValue);
                 return all.TryGetValue(aqn, out var fields) && fields.TryGetValue(fieldName, out string value)
                     ? value
                     : string.Empty;
@@ -161,7 +161,7 @@ namespace Ulink.Editor
 
             void RemoveComponentData(string aqn)
             {
-                var all = UlinkComponentsType.ParseAllData(rawProp.stringValue);
+                var all = UlinkComponentsType.ParseAllData(rawProperty.stringValue);
                 if (all.Remove(aqn))
                     WriteBack(RawTypes(), UlinkComponentsType.SerializeAllData(all));
             }
@@ -337,19 +337,24 @@ namespace Ulink.Editor
             foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
             {
                 string name = assembly.GetName().Name ?? string.Empty;
+                // Skip known assemblies
                 if (name.StartsWith("Unity") || name.StartsWith("System") ||
                     name.StartsWith("mscorlib") || name.StartsWith("Mono") ||
                     name.StartsWith("netstandard"))
+                {
                     continue;
+                }
 
                 try
                 {
-                    foreach (var type in assembly.GetTypes())
+                    var types = assembly.GetTypes();
+                    foreach (var type in types)
                     {
-                        if (type.IsClass && !type.IsAbstract &&
-                            type.GetInterfaces().Any(i => i.IsGenericType &&
-                                i.GetGenericTypeDefinition() == genericBase))
+                        if (type.IsClass && !type.IsAbstract && type.GetInterfaces()
+                            .Any(i => i.IsGenericType && i.GetGenericTypeDefinition() == genericBase))
+                        {
                             result.Add(type);
+                        }
                     }
                 }
                 catch { }
@@ -360,17 +365,17 @@ namespace Ulink.Editor
 
         private static bool IsCompatibleComponent(Type componentType, Type elementType)
         {
-            var gi = typeof(IUlinkComponent<>);
+            var type = typeof(IUlinkComponent<>);
             return componentType.GetInterfaces().Any(i =>
-                i.IsGenericType && i.GetGenericTypeDefinition() == gi &&
+                i.IsGenericType && i.GetGenericTypeDefinition() == type &&
                 i.GetGenericArguments()[0].IsAssignableFrom(elementType));
         }
 
         private static bool IsExactMatch(Type componentType, Type elementType)
         {
-            var gi = typeof(IUlinkComponent<>);
+            var type = typeof(IUlinkComponent<>);
             return componentType.GetInterfaces().Any(i =>
-                i.IsGenericType && i.GetGenericTypeDefinition() == gi &&
+                i.IsGenericType && i.GetGenericTypeDefinition() == type &&
                 i.GetGenericArguments()[0] == elementType);
         }
     }
