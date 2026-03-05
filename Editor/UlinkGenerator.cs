@@ -248,8 +248,8 @@ namespace Ulink.Editor
                 if (_typedComponents.Count > 0 || _baseComponents.Count > 0)
                 {{
 #if UNITY_EDITOR
-                    if (!(_typedComponents.Exists(component => !component.IsRuntimeOnly) ||
-                        _baseComponents.Exists(c => !c.IsRuntimeOnly)))
+                    if (!(_typedComponents.Exists(component => component is not IUlinkRuntimeOnly) ||
+                        _baseComponents.Exists(c => c is not IUlinkRuntimeOnly)))
                     {{
 #endif
                         UnregisterCallback<AttachToPanelEvent>(OnComponentsPanelAttach);
@@ -286,7 +286,7 @@ namespace Ulink.Editor
                         if (instanceType == null && baseComp == null) continue;
 
 #if UNITY_EDITOR
-                        if (instanceType?.IsRuntimeOnly ?? baseComp?.IsRuntimeOnly ?? false) continue;
+                        if (instance is IUlinkRuntimeOnly) continue;
 #endif
                         if (instanceType != null) _typedComponents.Add(instanceType);
                         else _baseComponents.Add(baseComp!);

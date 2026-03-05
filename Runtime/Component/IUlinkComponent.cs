@@ -5,11 +5,6 @@ namespace Ulink.Runtime
     public interface IUlinkComponent<in T> where T : VisualElement
     {
         /// <summary>
-        /// When true, this controller is excluded from editor preview and only runs at runtime.
-        /// </summary>
-        public bool IsRuntimeOnly { get; }
-
-        /// <summary>
         /// Called once when the controller is first assigned to its element.
         /// Use this to store a reference to the element and perform initial configuration.
         /// </summary>
