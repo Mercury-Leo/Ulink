@@ -14,7 +14,9 @@ namespace Ulink.Runtime
 
     public class UlinkAssetRegistry : ScriptableObject
     {
-        public List<AssetEntry> Entries { get; } = new();
+        [SerializeField] private List<AssetEntry> entries = new();
+
+        public List<AssetEntry> Entries => entries;
 
         private static UlinkAssetRegistry? _instance;
 
