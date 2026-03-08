@@ -192,46 +192,55 @@ namespace Ulink.Editor
                 if (fieldType == typeof(int))
                 {
                     int.TryParse(current, out int v);
-                    var f = new IntegerField { value = v, isDelayed = true, style = { flexGrow = 1 } };
-                    f.RegisterValueChangedCallback(evt =>
+                    var intField = new IntegerField { value = v, isDelayed = true, style = { flexGrow = 1 } };
+                    intField.RegisterValueChangedCallback(evt =>
                         SetComponentPropertyValue(aqn, field.Name, evt.newValue.ToString()));
-                    ctrl = f;
+                    ctrl = intField;
                 }
                 else if (fieldType == typeof(float))
                 {
                     float.TryParse(current, NumberStyles.Float, CultureInfo.InvariantCulture, out var v);
-                    var f = new FloatField { value = v, isDelayed = true, style = { flexGrow = 1 } };
-                    f.RegisterValueChangedCallback(evt =>
+                    var floatField = new FloatField { value = v, isDelayed = true, style = { flexGrow = 1 } };
+                    floatField.RegisterValueChangedCallback(evt =>
                         SetComponentPropertyValue(aqn, field.Name,
                             evt.newValue.ToString(CultureInfo.InvariantCulture)));
-                    ctrl = f;
+                    ctrl = floatField;
                 }
                 else if (fieldType == typeof(bool))
                 {
                     bool.TryParse(current, out bool value);
-                    var f = new Toggle { value = value };
-                    f.RegisterValueChangedCallback(evt =>
+                    var toggleField = new Toggle { value = value };
+                    toggleField.RegisterValueChangedCallback(evt =>
                         SetComponentPropertyValue(aqn, field.Name, evt.newValue.ToString()));
-                    ctrl = f;
+                    ctrl = toggleField;
                 }
                 else if (typeof(UnityEngine.Object).IsAssignableFrom(fieldType))
                 {
-                    var currentObj = string.IsNullOrEmpty(current)
-                        ? null
-                        : AssetDatabase.LoadAssetAtPath(current, fieldType);
-                    var f = new UnityEditor.UIElements.ObjectField
+                    var currentObj = ResolveStoredAsset(current, fieldType);
+                    var objField = new UnityEditor.UIElements.ObjectField
                     {
                         value = currentObj,
                         objectType = fieldType,
                         allowSceneObjects = false,
                         style = { flexGrow = 1 }
                     };
-                    f.RegisterValueChangedCallback(evt =>
+                    objField.RegisterValueChangedCallback(evt =>
                     {
-                        string path = evt.newValue != null ? AssetDatabase.GetAssetPath(evt.newValue) : string.Empty;
-                        SetComponentPropertyValue(aqn, field.Name, path);
+                        if (evt.newValue != null)
+                        {
+                            string path = AssetDatabase.GetAssetPath(evt.newValue);
+                            string guid = AssetDatabase.AssetPathToGUID(path);
+                            UlinkAssetRegistryEditor.Register(guid, evt.newValue);
+                            SetComponentPropertyValue(aqn, field.Name, guid);
+                        }
+                        else
+                        {
+                            string oldGuid = GetStoredPropertyValue(aqn, field.Name);
+                            if (!string.IsNullOrEmpty(oldGuid)) UlinkAssetRegistryEditor.Unregister(oldGuid);
+                            SetComponentPropertyValue(aqn, field.Name, string.Empty);
+                        }
                     });
-                    ctrl = f;
+                    ctrl = objField;
                 }
                 else
                 {
@@ -312,6 +321,14 @@ namespace Ulink.Editor
         }
 
         // ── Static helpers ────────────────────────────────────────────────────
+
+        private static UnityEngine.Object ResolveStoredAsset(string stored, Type type)
+        {
+            if (string.IsNullOrEmpty(stored)) return null;
+            // Legacy: starts with "Assets/" → path format; otherwise treat as GUID
+            string path = stored.StartsWith("Assets/") ? stored : AssetDatabase.GUIDToAssetPath(stored);
+            return string.IsNullOrEmpty(path) ? null : AssetDatabase.LoadAssetAtPath(path, type);
+        }
 
         private static List<FieldInfo> GetUlinkPropertyFields(Type componentType) =>
             componentType
