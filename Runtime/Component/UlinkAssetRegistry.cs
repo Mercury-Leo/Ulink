@@ -8,8 +8,8 @@ namespace Ulink.Runtime
     [Serializable]
     public struct AssetEntry
     {
-        public string Guid;
-        public UnityEngine.Object Asset;
+        public string guid;
+        public UnityEngine.Object asset;
     }
 
     public class UlinkAssetRegistry : ScriptableObject
@@ -27,7 +27,7 @@ namespace Ulink.Runtime
         {
             foreach (var entry in Entries)
             {
-                if (entry.Guid == guid) return entry.Asset;
+                if (entry.guid == guid) return entry.asset;
             }
 
             return null;

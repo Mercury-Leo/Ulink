@@ -44,9 +44,9 @@ namespace Ulink.Editor
         {
             var registry = GetOrCreate();
             var entries = registry.Entries;
-            int idx = entries.FindIndex(entry => entry.Guid == guid);
-            if (idx >= 0) entries[idx] = new AssetEntry { Guid = guid, Asset = asset };
-            else entries.Add(new AssetEntry { Guid = guid, Asset = asset });
+            int idx = entries.FindIndex(entry => entry.guid == guid);
+            if (idx >= 0) entries[idx] = new AssetEntry { guid = guid, asset = asset };
+            else entries.Add(new AssetEntry { guid = guid, asset = asset });
             EditorUtility.SetDirty(registry);
             AssetDatabase.SaveAssetIfDirty(registry);
         }
@@ -54,7 +54,7 @@ namespace Ulink.Editor
         public static void Unregister(string guid)
         {
             var registry = GetOrCreate();
-            registry.Entries.RemoveAll(entry => entry.Guid == guid);
+            registry.Entries.RemoveAll(entry => entry.guid == guid);
             EditorUtility.SetDirty(registry);
             AssetDatabase.SaveAssetIfDirty(registry);
         }
