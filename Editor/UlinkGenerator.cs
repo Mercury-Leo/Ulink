@@ -352,8 +352,8 @@ namespace Ulink.Editor
                 if (_typedComponents.Count > 0 || _baseComponents.Count > 0)
                 {{
 #if UNITY_EDITOR
-                    if (!(_typedComponents.Exists(component => !component.GetType().IsDefined(typeof(UlinkRuntimeAttribute), false)) ||
-                        _baseComponents.Exists(component => !component.GetType().IsDefined(typeof(UlinkRuntimeAttribute), false))))
+                    if (!(_typedComponents.Exists(component => !component.GetType().IsDefined(typeof({nameof(UlinkRuntimeOnlyAttribute)}), false)) ||
+                        _baseComponents.Exists(component => !component.GetType().IsDefined(typeof({nameof(UlinkRuntimeOnlyAttribute)}), false))))
                     {{
 #endif
                         UnregisterCallback<AttachToPanelEvent>(OnComponentsPanelAttach);
@@ -390,7 +390,7 @@ namespace Ulink.Editor
                         if (instanceType == null && baseComp == null) continue;
 
 #if UNITY_EDITOR
-                        if (type.IsDefined(typeof(UlinkRuntimeAttribute), false)) continue;
+                        if (type.IsDefined(typeof({nameof(UlinkRuntimeOnlyAttribute)}), false)) continue;
 #endif
                         if (instanceType != null) _typedComponents.Add(instanceType);
                         else _baseComponents.Add(baseComp!);
