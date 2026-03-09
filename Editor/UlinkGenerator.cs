@@ -65,6 +65,7 @@ namespace Ulink.Editor
         internal static void SyncRegistry()
         {
             var collectedGuids = new Dictionary<string, UnityEngine.Object>();
+            var fieldCache = new Dictionary<Type, List<FieldInfo>>();
 
             string[] uxmlGuids = AssetDatabase.FindAssets("t:VisualTreeAsset");
             foreach (string uxmlGuid in uxmlGuids)
@@ -111,11 +112,15 @@ namespace Ulink.Editor
                         var type = Type.GetType(aqn);
                         if (type == null) continue;
 
-                        var ulinkObjectFields = type
-                            .GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
-                            .Where(field =>
-                                field.GetCustomAttribute<UlinkPropertyAttribute>() != null &&
-                                typeof(UnityEngine.Object).IsAssignableFrom(field.FieldType)).ToList();
+                        if (!fieldCache.TryGetValue(type, out var ulinkObjectFields))
+                        {
+                            ulinkObjectFields = type
+                                .GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
+                                .Where(field =>
+                                    field.GetCustomAttribute<UlinkPropertyAttribute>() != null &&
+                                    typeof(UnityEngine.Object).IsAssignableFrom(field.FieldType)).ToList();
+                            fieldCache[type] = ulinkObjectFields;
+                        }
 
                         foreach (var field in ulinkObjectFields)
                         {
@@ -268,7 +273,7 @@ namespace Ulink.Editor
                     typeof(VisualElement).IsAssignableFrom(type) &&
                     uxmlElementTypes.Contains(type))
                 .GroupBy(type => type.FullName)
-                .Select(g => g.First())
+                .Select(group => group.First())
                 .ToList();
 
             var options = new HashSet<Type>(types);
