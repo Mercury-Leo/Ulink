@@ -3,7 +3,9 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Reflection;
 using System.Text;
+using System.Xml.Linq;
 using Ulink.Runtime;
 using UnityEditor;
 using UnityEditor.Compilation;
@@ -15,10 +17,12 @@ namespace Ulink.Editor
     [InitializeOnLoad]
     public static class UlinkGenerator
     {
-        private const string GenerateFolder = "Generated/Controller";
+        private const string GenerateFolder = "Generated/Ulink";
         private const string AssetsPath = "Assets";
         private const string UlinkFileName = "Ulink.g.cs";
         private const int TemplateVersion = 1;
+        private const string RegistryResourcesFolder = "Assets/Generated/Ulink/Resources";
+        internal const string RegistryAssetPath = "Assets/Generated/Ulink/Resources/UlinkAssetRegistry.asset";
 
         private static readonly Dictionary<string, string> AssemblyRootByName = new();
 
@@ -27,10 +31,10 @@ namespace Ulink.Editor
             CompilationPipeline.compilationFinished += _ => GenerateControllers();
         }
 
-        [MenuItem("Tools/Leo's Tools/Ulink/Generate Controllers")]
+        [MenuItem("Tools/Leo's Tools/Ulink/Generate")]
         public static void GenerateControllers()
         {
-           Generate();
+            Generate();
         }
 
         private static void Generate()
@@ -50,10 +54,110 @@ namespace Ulink.Editor
                 anyChanged = WriteClassToFile(builder, root, anyChanged);
             }
 
+            SyncRegistry();
+
             if (anyChanged)
             {
                 AssetDatabase.Refresh();
             }
+        }
+
+        internal static void SyncRegistry()
+        {
+            var collectedGuids = new Dictionary<string, UnityEngine.Object>();
+
+            string[] uxmlGuids = AssetDatabase.FindAssets("t:VisualTreeAsset");
+            foreach (string uxmlGuid in uxmlGuids)
+            {
+                string uxmlPath = AssetDatabase.GUIDToAssetPath(uxmlGuid);
+                if (string.IsNullOrEmpty(uxmlPath)) continue;
+
+                string fullPath = Path.GetFullPath(uxmlPath).Replace('\\', '/');
+                if (!File.Exists(fullPath)) continue;
+
+                string text;
+                try
+                {
+                    text = File.ReadAllText(fullPath);
+                }
+                catch
+                {
+                    continue;
+                }
+
+                XDocument doc;
+                try
+                {
+                    doc = XDocument.Parse(text);
+                }
+                catch
+                {
+                    continue;
+                }
+
+                foreach (var element in doc.Descendants())
+                {
+                    var attribute = element.Attributes()
+                        .FirstOrDefault(a => a.Name.LocalName == "ulink-components");
+                    if (attribute == null) continue;
+
+                    string rawValue = attribute.Value;
+                    if (string.IsNullOrEmpty(rawValue)) continue;
+
+                    var allData = UlinkComponentsType.ParseAllData(rawValue);
+
+                    foreach ((string? aqn, var fields) in allData)
+                    {
+                        var type = Type.GetType(aqn);
+                        if (type == null) continue;
+
+                        var ulinkObjectFields = type
+                            .GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
+                            .Where(field =>
+                                field.GetCustomAttribute<UlinkPropertyAttribute>() != null &&
+                                typeof(UnityEngine.Object).IsAssignableFrom(field.FieldType)).ToList();
+
+                        foreach (var field in ulinkObjectFields)
+                        {
+                            if (!fields.TryGetValue(field.Name, out string? guidValue)) continue;
+                            if (string.IsNullOrEmpty(guidValue)) continue;
+                            if (collectedGuids.ContainsKey(guidValue)) continue;
+
+                            string assetPath = AssetDatabase.GUIDToAssetPath(guidValue);
+                            if (string.IsNullOrEmpty(assetPath)) continue;
+
+                            var asset = AssetDatabase.LoadAssetAtPath(assetPath, typeof(UnityEngine.Object));
+                            if (asset == null) continue;
+
+                            collectedGuids[guidValue] = asset;
+                        }
+                    }
+                }
+            }
+
+            var registry = AssetDatabase.LoadAssetAtPath<UlinkAssetRegistry>(RegistryAssetPath);
+
+            bool changed = registry == null
+                || registry.Entries.Count != collectedGuids.Count
+                || registry.Entries.Any(e => !collectedGuids.ContainsKey(e.guid));
+
+            if (!changed) return;
+
+            if (registry == null)
+            {
+                if (!Directory.Exists(RegistryResourcesFolder))
+                    Directory.CreateDirectory(RegistryResourcesFolder);
+
+                registry = ScriptableObject.CreateInstance<UlinkAssetRegistry>();
+                AssetDatabase.CreateAsset(registry, RegistryAssetPath);
+            }
+
+            registry.Entries.Clear();
+            foreach ((string? guid, var asset) in collectedGuids)
+                registry.Entries.Add(new AssetEntry { guid = guid, asset = asset });
+
+            EditorUtility.SetDirty(registry);
+            AssetDatabase.SaveAssetIfDirty(registry);
         }
 
         private static bool WriteClassToFile(StringBuilder builder, string root, bool anyChanged)
@@ -248,8 +352,8 @@ namespace Ulink.Editor
                 if (_typedComponents.Count > 0 || _baseComponents.Count > 0)
                 {{
 #if UNITY_EDITOR
-                    if (!(_typedComponents.Exists(component => !component.GetType().IsDefined(typeof(UlinkRuntimeAttribute), false)) ||
-                        _baseComponents.Exists(component => !component.GetType().IsDefined(typeof(UlinkRuntimeAttribute), false))))
+                    if (!(_typedComponents.Exists(component => !component.GetType().IsDefined(typeof({nameof(UlinkRuntimeOnlyAttribute)}), false)) ||
+                        _baseComponents.Exists(component => !component.GetType().IsDefined(typeof({nameof(UlinkRuntimeOnlyAttribute)}), false))))
                     {{
 #endif
                         UnregisterCallback<AttachToPanelEvent>(OnComponentsPanelAttach);
@@ -286,7 +390,7 @@ namespace Ulink.Editor
                         if (instanceType == null && baseComp == null) continue;
 
 #if UNITY_EDITOR
-                        if (type.IsDefined(typeof(UlinkRuntimeAttribute), false)) continue;
+                        if (type.IsDefined(typeof({nameof(UlinkRuntimeOnlyAttribute)}), false)) continue;
 #endif
                         if (instanceType != null) _typedComponents.Add(instanceType);
                         else _baseComponents.Add(baseComp!);
@@ -364,6 +468,25 @@ using UnityEngine.UIElements;";
             }
 
             return false;
+        }
+    }
+
+    internal class UlinkRegistryWatcher : AssetPostprocessor
+    {
+        private const string UxmlFileEnding = ".uxml";
+
+        private static void OnPostprocessAllAssets(string[] importedAssets, string[] deletedAssets,
+            string[] movedAssets, string[] movedFromAssetPaths)
+        {
+            bool shouldSync = deletedAssets.Contains(UlinkGenerator.RegistryAssetPath)
+                || importedAssets.Any(path => path.EndsWith(UxmlFileEnding, StringComparison.OrdinalIgnoreCase))
+                || deletedAssets.Any(path => path.EndsWith(UxmlFileEnding, StringComparison.OrdinalIgnoreCase))
+                || movedAssets.Any(path => path.EndsWith(UxmlFileEnding, StringComparison.OrdinalIgnoreCase))
+                || movedFromAssetPaths.Any(path => path.EndsWith(UxmlFileEnding, StringComparison.OrdinalIgnoreCase));
+
+            if (!shouldSync) return;
+            UlinkGenerator.SyncRegistry();
+            AssetDatabase.SaveAssets();
         }
     }
 }

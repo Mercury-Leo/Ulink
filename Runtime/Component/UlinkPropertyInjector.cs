@@ -64,8 +64,14 @@ namespace Ulink.Runtime
 
             if (typeof(UnityEngine.Object).IsAssignableFrom(target))
             {
+                if (string.IsNullOrEmpty(raw)) return null;
 #if UNITY_EDITOR
-                return !string.IsNullOrEmpty(raw) ? UnityEditor.AssetDatabase.LoadAssetAtPath(raw, target) : null;
+                // Editor: GUID format (or legacy path)
+                string path = raw.StartsWith("Assets/") ? raw : UnityEditor.AssetDatabase.GUIDToAssetPath(raw);
+                return string.IsNullOrEmpty(path) ? null : UnityEditor.AssetDatabase.LoadAssetAtPath(path, target);
+#else
+                // Runtime: resolve via registry
+                return UlinkAssetRegistry.Instance?.Get(raw);
 #endif
             }
 
