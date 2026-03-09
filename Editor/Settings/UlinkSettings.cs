@@ -16,6 +16,18 @@ namespace Ulink.Editor
         private const string UlinkSymbol = "ULINK_EDITOR";
 
         [SerializeField] private bool runInEditor = true;
+        [SerializeField] private bool disableAutomaticGeneration;
+
+        public bool DisableAutomaticGeneration
+        {
+            get => disableAutomaticGeneration;
+            set
+            {
+                if (disableAutomaticGeneration == value) return;
+                disableAutomaticGeneration = value;
+                SaveDirty();
+            }
+        }
 
         public bool RunInEditor
         {
