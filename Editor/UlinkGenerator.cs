@@ -334,114 +334,169 @@ namespace Ulink.Editor
 
         private static string GenerateComponentsClass(string className, string? namespaceName)
         {
-            return $@"{(string.IsNullOrEmpty(namespaceName) ? string.Empty : $"namespace {namespaceName}\n{{")}
-    public partial class {className}
-    {{
-        private UlinkComponentsType _componentsType;
-        private readonly List<IUlinkComponent<{className}>> _typedComponents = new();
-        private readonly List<IUlinkComponent<VisualElement>> _baseComponents = new();
+            var builder = new StringBuilder();
+            var indent = 0;
 
-        [UxmlAttribute(""ulink-components"")]
-        private UlinkComponentsType ComponentsType
-        {{
-            get => _componentsType;
-            set
-            {{
-                // Reset components
-#if !UNITY_EDITOR || ULINK_EDITOR
-                if (_typedComponents.Count > 0 || _baseComponents.Count > 0)
-                {{
-#if UNITY_EDITOR
-                    if (!(_typedComponents.Exists(component => !component.GetType().IsDefined(typeof({nameof(UlinkRuntimeOnlyAttribute)}), false)) ||
-                        _baseComponents.Exists(component => !component.GetType().IsDefined(typeof({nameof(UlinkRuntimeOnlyAttribute)}), false))))
-                    {{
-#endif
-                        UnregisterCallback<AttachToPanelEvent>(OnComponentsPanelAttach);
-                        UnregisterCallback<DetachFromPanelEvent>(OnComponentsPanelDetach);
-                        foreach (var component in _typedComponents) component.OnDetach();
-                        foreach (var component in _baseComponents) component.OnDetach();
-#if UNITY_EDITOR
-                    }}
-#endif
-                }}
-#endif
+            bool hasNamespace = !string.IsNullOrEmpty(namespaceName);
+            if (hasNamespace) { Line($"namespace {namespaceName}"); Line("{"); indent++; }
 
-                _typedComponents.Clear();
-                _baseComponents.Clear();
+            Line($"public partial class {className}");
+            Line("{");
+            indent++;
 
-                if (string.IsNullOrEmpty(value.TypeNamesRaw))
-                {{
-                    _componentsType = UlinkComponentsType.Empty;
-                    return;
-                }}
+            // Fields
+            Line($"private {nameof(UlinkComponentsType)} _componentsType;");
+            Line($"private readonly List<{nameof(IUlinkComponent<VisualElement>)}<{className}>> _typedComponents = new();");
+            Line($"private readonly List<{nameof(IUlinkComponent<VisualElement>)}<{nameof(VisualElement)}>> _baseComponents = new();");
+            Line();
 
-                try
-                {{
-                    _componentsType = value;
-#if !UNITY_EDITOR || ULINK_EDITOR
-                    foreach (var type in value.Types)
-                    {{
-                        if (type == null) continue;
+            // Property
+            Line($"[UxmlAttribute(\"ulink-components\")]");
+            Line($"private {nameof(UlinkComponentsType)} ComponentsType");
+            Line("{");
+            indent++;
 
-                        object? instance = Activator.CreateInstance(type);
-                        var instanceType = instance as IUlinkComponent<{className}>;
-                        var baseComp = instanceType == null ? instance as IUlinkComponent<VisualElement> : null;
+            Line("get => _componentsType;");
+            Line("set");
+            Line("{");
+            indent++;
 
-                        if (instanceType == null && baseComp == null) continue;
+            // --- Reset block ---
+            Line("// Reset components");
+            Directive("#if !UNITY_EDITOR || ULINK_EDITOR");
+            Line("if (_typedComponents.Count > 0 || _baseComponents.Count > 0)");
+            Line("{");
+            indent++;
+            Directive("#if UNITY_EDITOR");
+            Line($"if (!(_typedComponents.Exists(component => !component.GetType().IsDefined(typeof({nameof(UlinkRuntimeOnlyAttribute)}), false)) ||");
+            Line($"    _baseComponents.Exists(component => !component.GetType().IsDefined(typeof({nameof(UlinkRuntimeOnlyAttribute)}), false))))");
+            Line("{");
+            indent++;
+            Directive("#endif");
+            Line($"UnregisterCallback<{nameof(AttachToPanelEvent)}>(OnComponentsPanelAttach);");
+            Line($"UnregisterCallback<{nameof(DetachFromPanelEvent)}>(OnComponentsPanelDetach);");
+            Line("foreach (var component in _typedComponents) component.OnDetach();");
+            Line("foreach (var component in _baseComponents) component.OnDetach();");
+            Directive("#if UNITY_EDITOR");
+            indent--;
+            Line("}");
+            Directive("#endif");
+            indent--;
+            Line("}");
+            Directive("#endif");
+            Line();
 
-#if UNITY_EDITOR
-                        if (type.IsDefined(typeof({nameof(UlinkRuntimeOnlyAttribute)}), false)) continue;
-#endif
-                        if (instanceType != null) _typedComponents.Add(instanceType);
-                        else _baseComponents.Add(baseComp!);
+            // --- Clear + early return ---
+            Line("_typedComponents.Clear();");
+            Line("_baseComponents.Clear();");
+            Line();
+            Line($"if (string.IsNullOrEmpty(value.{nameof(UlinkComponentsType.TypeNamesRaw)}))");
+            Line("{");
+            indent++;
+            Line($"_componentsType = {nameof(UlinkComponentsType)}.{nameof(UlinkComponentsType.Empty)};");
+            Line("return;");
+            indent--;
+            Line("}");
+            Line();
 
-                        UlinkPropertyInjector.Inject(instance!, value, type.AssemblyQualifiedName);
+            // --- try/catch ---
+            Line("try");
+            Line("{");
+            indent++;
+            Line("_componentsType = value;");
+            Directive("#if !UNITY_EDITOR || ULINK_EDITOR");
+            Line($"foreach (var type in value.{nameof(UlinkComponentsType.Types)})");
+            Line("{");
+            indent++;
+            Line("if (type == null) continue;");
+            Line();
+            Line("object? instance = Activator.CreateInstance(type);");
+            Line($"var instanceType = instance as {nameof(IUlinkComponent<VisualElement>)}<{className}>;");
+            Line($"var baseComp = instanceType == null ? instance as {nameof(IUlinkComponent<VisualElement>)}<{nameof(VisualElement)}> : null;");
+            Line();
+            Line("if (instanceType == null && baseComp == null) continue;");
+            Line();
+            Directive("#if UNITY_EDITOR");
+            Line($"if (type.IsDefined(typeof({nameof(UlinkRuntimeOnlyAttribute)}), false)) continue;");
+            Directive("#endif");
+            Line("if (instanceType != null) _typedComponents.Add(instanceType);");
+            Line("else _baseComponents.Add(baseComp!);");
+            Line();
+            Line($"{nameof(UlinkPropertyInjector)}.{nameof(UlinkPropertyInjector.Inject)}(instance!, value, type.AssemblyQualifiedName);");
+            Line();
+            Line("instanceType?.Setup(this);");
+            Line("baseComp?.Setup(this);");
+            indent--;
+            Line("}");
+            Line();
+            Line("if (panel != null)");
+            Line("{");
+            indent++;
+            Line("foreach (var component in _typedComponents) component.OnAttach();");
+            Line("foreach (var component in _baseComponents) component.OnAttach();");
+            indent--;
+            Line("}");
+            Line();
+            Line("if (_typedComponents.Count > 0 || _baseComponents.Count > 0)");
+            Line("{");
+            indent++;
+            Line($"RegisterCallback<{nameof(AttachToPanelEvent)}>(OnComponentsPanelAttach);");
+            Line($"RegisterCallback<{nameof(DetachFromPanelEvent)}>(OnComponentsPanelDetach);");
+            indent--;
+            Line("}");
+            Directive("#endif");
+            indent--;
+            Line("}");
+            Line("catch (Exception e)");
+            Line("{");
+            indent++;
+            Line("_typedComponents.Clear();");
+            Line("_baseComponents.Clear();");
+            Line($"_componentsType = {nameof(UlinkComponentsType)}.{nameof(UlinkComponentsType.Empty)};");
+            Line($"Debug.LogWarning($\"[Ulink] Failed to initialize Ulink Components: {{e}}\");");
+            indent--;
+            Line("}");
 
-                        instanceType?.Setup(this);
-                        baseComp?.Setup(this);
-                    }}
+            indent--;
+            Line("}"); // set
+            indent--;
+            Line("}"); // property
+            Line();
 
-                    if (panel != null)
-                    {{
-                        foreach (var component in _typedComponents) component.OnAttach();
-                        foreach (var component in _baseComponents) component.OnAttach();
-                    }}
+            // --- Callback methods ---
+            Directive("#if !UNITY_EDITOR || ULINK_EDITOR");
+            Line($"private void OnComponentsPanelAttach({nameof(AttachToPanelEvent)} panelEvent)");
+            Line("{");
+            indent++;
+            Line("if (panelEvent.target != this) return;");
+            Line("foreach (var component in _typedComponents) component.OnAttach();");
+            Line("foreach (var component in _baseComponents) component.OnAttach();");
+            indent--;
+            Line("}");
+            Line();
+            Line($"private void OnComponentsPanelDetach({nameof(DetachFromPanelEvent)} panelEvent)");
+            Line("{");
+            indent++;
+            Line("if (panelEvent.target != this) return;");
+            Line("foreach (var component in _typedComponents) component.OnDetach();");
+            Line("foreach (var component in _baseComponents) component.OnDetach();");
+            indent--;
+            Line("}");
+            Directive("#endif");
 
-                    if (_typedComponents.Count > 0 || _baseComponents.Count > 0)
-                    {{
-                        RegisterCallback<AttachToPanelEvent>(OnComponentsPanelAttach);
-                        RegisterCallback<DetachFromPanelEvent>(OnComponentsPanelDetach);
-                    }}
-#endif
-                }}
-                catch (Exception e)
-                {{
-                    _typedComponents.Clear();
-                    _baseComponents.Clear();
-                    _componentsType = UlinkComponentsType.Empty;
-                    Debug.LogWarning($""[Ulink] Failed to initialize Ulink Components: {{e}}"");
-                }}
-            }}
-        }}
+            indent--;
+            Line("}"); // class
 
-#if !UNITY_EDITOR || ULINK_EDITOR
-        private void OnComponentsPanelAttach(AttachToPanelEvent panelEvent)
-        {{
-            if (panelEvent.target != this) return;
-            foreach (var component in _typedComponents) component.OnAttach();
-            foreach (var component in _baseComponents) component.OnAttach();
-        }}
+            if (!hasNamespace) return builder.ToString().Replace("\r\n", "\n");
+            
+            indent--; Line("}"); // namespace
 
-        private void OnComponentsPanelDetach(DetachFromPanelEvent panelEvent)
-        {{
-            if (panelEvent.target != this) return;
-            foreach (var component in _typedComponents) component.OnDetach();
-            foreach (var component in _baseComponents) component.OnDetach();
-        }}
-#endif
-    }}
-{(string.IsNullOrEmpty(namespaceName) ? string.Empty : "}")}
-";
+            return builder.ToString().Replace("\r\n", "\n");
+
+            void Directive(string text) => builder.AppendLine(text);
+
+            void Line(string text = "") =>
+                builder.AppendLine(text.Length == 0 ? string.Empty : new string(' ', indent * 4) + text);
         }
 
         private static string GenerateUsing()
