@@ -28,7 +28,11 @@ namespace Ulink.Editor
 
         static UlinkGenerator()
         {
-            CompilationPipeline.compilationFinished += _ => GenerateControllers();
+            CompilationPipeline.compilationFinished += _ =>
+            {
+                if (!UlinkSettings.instance.DisableAutomaticGeneration)
+                    GenerateControllers();
+            };
         }
 
         [MenuItem("Tools/Leo's Tools/Ulink/Generate")]
@@ -478,6 +482,8 @@ using UnityEngine.UIElements;";
         private static void OnPostprocessAllAssets(string[] importedAssets, string[] deletedAssets,
             string[] movedAssets, string[] movedFromAssetPaths)
         {
+            if (UlinkSettings.instance.DisableAutomaticGeneration) return;
+
             bool shouldSync = deletedAssets.Contains(UlinkGenerator.RegistryAssetPath)
                 || importedAssets.Any(path => path.EndsWith(UxmlFileEnding, StringComparison.OrdinalIgnoreCase))
                 || deletedAssets.Any(path => path.EndsWith(UxmlFileEnding, StringComparison.OrdinalIgnoreCase))

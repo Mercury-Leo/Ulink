@@ -27,6 +27,14 @@ namespace Ulink.Editor
 
             rootElement.Add(runInEditor);
 
+            var disableAutoGen = new Toggle("Disable Automatic Generation")
+            {
+                value = settings.DisableAutomaticGeneration,
+                tooltip = "When enabled, Ulink will not auto-generate on compilation or asset changes. Use the Generate button to generate manually."
+            };
+            disableAutoGen.RegisterValueChangedCallback(value => UlinkSettings.instance.DisableAutomaticGeneration = value.newValue);
+            rootElement.Add(disableAutoGen);
+
             var generateButton =
                 ElementsUtility.CreateButton("Generate", UlinkGenerator.GenerateControllers, "Generate Components");
 
