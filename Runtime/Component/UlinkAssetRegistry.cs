@@ -1,6 +1,7 @@
 #nullable enable
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 
 namespace Ulink.Runtime
@@ -21,16 +22,16 @@ namespace Ulink.Runtime
         private static UlinkAssetRegistry? _instance;
 
         public static UlinkAssetRegistry? Instance =>
-            _instance != null ? _instance : (_instance = Resources.Load<UlinkAssetRegistry>("UlinkAssetRegistry"));
+            _instance != null ? _instance : _instance = Resources.Load<UlinkAssetRegistry>("UlinkAssetRegistry");
+
+        private Dictionary<string, UnityEngine.Object>? _lookup;
+
+        private void OnValidate() => _lookup = null;
 
         public UnityEngine.Object? Get(string guid)
         {
-            foreach (var entry in Entries)
-            {
-                if (entry.guid == guid) return entry.asset;
-            }
-
-            return null;
+            _lookup ??= Entries.ToDictionary(entry => entry.guid, e => e.asset);
+            return _lookup.GetValueOrDefault(guid);
         }
     }
 }

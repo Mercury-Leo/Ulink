@@ -1,6 +1,8 @@
 #nullable enable
 using System;
+using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
 using System.Reflection;
 
 namespace Ulink.Runtime
@@ -12,6 +14,8 @@ namespace Ulink.Runtime
     /// </summary>
     public static class UlinkPropertyInjector
     {
+        private static readonly Dictionary<Type, FieldInfo[]> FieldCache = new();
+
         public static void Inject(object instance, UlinkComponentsType componentsType, string? assemblyQualifiedName)
         {
             if (assemblyQualifiedName == null) return;
@@ -21,11 +25,8 @@ namespace Ulink.Runtime
 
             var type = instance.GetType();
 
-            var fields = type.GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
-            foreach (var field in fields)
+            foreach (var field in GetInjectableFields(type))
             {
-                if (field.GetCustomAttribute<UlinkPropertyAttribute>() == null) continue;
-
                 if (!data.TryGetValue(field.Name, out string? rawValue)) continue;
 
                 try
@@ -83,6 +84,16 @@ namespace Ulink.Runtime
             {
                 return null;
             }
+        }
+
+        private static FieldInfo[] GetInjectableFields(Type type)
+        {
+            if (FieldCache.TryGetValue(type, out var cached)) return cached;
+            var fields = type.GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
+                .Where(field => field.GetCustomAttribute<UlinkPropertyAttribute>() != null)
+                .ToArray();
+            FieldCache[type] = fields;
+            return fields;
         }
     }
 }
