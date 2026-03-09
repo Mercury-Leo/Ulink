@@ -305,6 +305,12 @@ namespace Ulink.Editor
 
                     section.Add(row);
 
+                    // Runtime-only notice
+                    if (resolved != null && resolved.GetCustomAttribute<UlinkRuntimeOnlyAttribute>() != null)
+                    {
+                        section.Add(new HelpBox("Runtime only — not active in editor.", HelpBoxMessageType.Info));
+                    }
+
                     // [UlinkProperty] fields
                     if (resolved != null)
                     {
