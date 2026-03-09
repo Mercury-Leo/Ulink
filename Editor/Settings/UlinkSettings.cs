@@ -16,13 +16,6 @@ namespace Ulink.Editor
         private const string UlinkSymbol = "ULINK_EDITOR";
 
         [SerializeField] private bool runInEditor = true;
-        [SerializeField] private string assetRegistryPath = string.Empty;
-
-        public string AssetRegistryPath
-        {
-            get => assetRegistryPath;
-            set { assetRegistryPath = value; SaveDirty(); }
-        }
 
         public bool RunInEditor
         {

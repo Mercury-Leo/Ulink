@@ -230,13 +230,10 @@ namespace Ulink.Editor
                         {
                             string path = AssetDatabase.GetAssetPath(evt.newValue);
                             string guid = AssetDatabase.AssetPathToGUID(path);
-                            UlinkAssetRegistryEditor.Register(guid, evt.newValue);
                             SetComponentPropertyValue(aqn, field.Name, guid);
                         }
                         else
                         {
-                            string oldGuid = GetStoredPropertyValue(aqn, field.Name);
-                            if (!string.IsNullOrEmpty(oldGuid)) UlinkAssetRegistryEditor.Unregister(oldGuid);
                             SetComponentPropertyValue(aqn, field.Name, string.Empty);
                         }
                     });
