@@ -6,5 +6,5 @@ namespace Ulink.Runtime
     /// Marks the ulink component to work only in runtime and not in editor.
     /// </summary>
     [AttributeUsage(AttributeTargets.Class, Inherited = false)]
-    public sealed class UlinkRuntimeAttribute : Attribute { }
+    public sealed class UlinkRuntimeOnlyAttribute : Attribute { }
 }
