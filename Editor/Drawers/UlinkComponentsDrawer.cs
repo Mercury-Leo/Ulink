@@ -239,6 +239,63 @@ namespace Ulink.Editor
                     });
                     ctrl = objField;
                 }
+                else if (fieldType.IsEnum)
+                {
+                    var enumNames = Enum.GetNames(fieldType).ToList();
+                    string initialName = enumNames.Contains(current) ? current : enumNames[0];
+                    var dropdown = new DropdownField(enumNames, initialName) { style = { flexGrow = 1 } };
+                    dropdown.RegisterValueChangedCallback(evt =>
+                        SetComponentPropertyValue(aqn, field.Name, evt.newValue));
+                    ctrl = dropdown;
+                }
+                else if (fieldType == typeof(Vector2))
+                {
+                    var v = ParseVector2(current);
+                    var container = new VisualElement { style = { flexDirection = FlexDirection.Row, flexGrow = 1 } };
+                    float cx = v.x, cy = v.y;
+                    void SaveVec2() => SetComponentPropertyValue(aqn, field.Name,
+                        $"{cx.ToString(CultureInfo.InvariantCulture)},{cy.ToString(CultureInfo.InvariantCulture)}");
+                    container.Add(MakeEntry("X", v.x, val => { cx = val; SaveVec2(); }));
+                    container.Add(MakeEntry("Y", v.y, val => { cy = val; SaveVec2(); }));
+                    ctrl = container;
+                }
+                else if (fieldType == typeof(Vector3))
+                {
+                    var v = ParseVector3(current);
+                    var container = new VisualElement { style = { flexDirection = FlexDirection.Row, flexGrow = 1 } };
+                    float cx = v.x, cy = v.y, cz = v.z;
+                    void SaveVec3() => SetComponentPropertyValue(aqn, field.Name,
+                        $"{cx.ToString(CultureInfo.InvariantCulture)},{cy.ToString(CultureInfo.InvariantCulture)},{cz.ToString(CultureInfo.InvariantCulture)}");
+                    container.Add(MakeEntry("X", v.x, val => { cx = val; SaveVec3(); }));
+                    container.Add(MakeEntry("Y", v.y, val => { cy = val; SaveVec3(); }));
+                    container.Add(MakeEntry("Z", v.z, val => { cz = val; SaveVec3(); }));
+                    ctrl = container;
+                }
+                else if (fieldType == typeof(Vector4))
+                {
+                    var v = ParseVector4(current);
+                    var container = new VisualElement { style = { flexDirection = FlexDirection.Row, flexGrow = 1 } };
+                    float cx = v.x, cy = v.y, cz = v.z, cw = v.w;
+                    void SaveVec4() => SetComponentPropertyValue(aqn, field.Name,
+                        $"{cx.ToString(CultureInfo.InvariantCulture)},{cy.ToString(CultureInfo.InvariantCulture)},{cz.ToString(CultureInfo.InvariantCulture)},{cw.ToString(CultureInfo.InvariantCulture)}");
+                    container.Add(MakeEntry("X", v.x, val => { cx = val; SaveVec4(); }));
+                    container.Add(MakeEntry("Y", v.y, val => { cy = val; SaveVec4(); }));
+                    container.Add(MakeEntry("Z", v.z, val => { cz = val; SaveVec4(); }));
+                    container.Add(MakeEntry("W", v.w, val => { cw = val; SaveVec4(); }));
+                    ctrl = container;
+                }
+                else if (fieldType == typeof(Color))
+                {
+                    var c = ParseColor(current);
+                    var colorField = new UnityEditor.UIElements.ColorField { value = c, style = { flexGrow = 1 } };
+                    colorField.RegisterValueChangedCallback(evt =>
+                    {
+                        var col = evt.newValue;
+                        SetComponentPropertyValue(aqn, field.Name,
+                            $"{col.r.ToString(CultureInfo.InvariantCulture)},{col.g.ToString(CultureInfo.InvariantCulture)},{col.b.ToString(CultureInfo.InvariantCulture)},{col.a.ToString(CultureInfo.InvariantCulture)}");
+                    });
+                    ctrl = colorField;
+                }
                 else
                 {
                     var f = new TextField { value = current, isDelayed = true, style = { flexGrow = 1 } };
@@ -249,6 +306,16 @@ namespace Ulink.Editor
 
                 row.Add(ctrl);
                 return row;
+
+                VisualElement MakeEntry(string lbl, float init, Action<float> onChange)
+                {
+                    var sub = new VisualElement { style = { flexDirection = FlexDirection.Row, flexGrow = 1 } };
+                    sub.Add(new Label(lbl) { style = { width = 14, unityTextAlign = TextAnchor.MiddleLeft } });
+                    var f = new FloatField { value = init, isDelayed = true, style = { flexGrow = 1, minWidth = 30 } };
+                    f.RegisterValueChangedCallback(evt => onChange(evt.newValue));
+                    sub.Add(f);
+                    return sub;
+                }
             }
 
             // ── List ──────────────────────────────────────────────────────────
@@ -306,7 +373,7 @@ namespace Ulink.Editor
                     section.Add(row);
 
                     // Runtime-only notice
-                    if (resolved != null && resolved.GetCustomAttribute<UlinkRuntimeOnlyAttribute>() != null)
+                    if (resolved?.GetCustomAttribute<UlinkRuntimeOnlyAttribute>() != null)
                     {
                         section.Add(new HelpBox("Runtime only — not active in editor.", HelpBoxMessageType.Info));
                     }
@@ -325,6 +392,51 @@ namespace Ulink.Editor
 
         // ── Static helpers ────────────────────────────────────────────────────
 
+        private static Vector2 ParseVector2(string raw)
+        {
+            if (string.IsNullOrEmpty(raw)) return Vector2.zero;
+            string[] split = raw.Split(',');
+            if (split.Length < 2) return Vector2.zero;
+            float.TryParse(split[0], NumberStyles.Float, CultureInfo.InvariantCulture, out float x);
+            float.TryParse(split[1], NumberStyles.Float, CultureInfo.InvariantCulture, out float y);
+            return new Vector2(x, y);
+        }
+
+        private static Vector3 ParseVector3(string raw)
+        {
+            if (string.IsNullOrEmpty(raw)) return Vector3.zero;
+            string[] split = raw.Split(',');
+            if (split.Length < 3) return Vector3.zero;
+            float.TryParse(split[0], NumberStyles.Float, CultureInfo.InvariantCulture, out float x);
+            float.TryParse(split[1], NumberStyles.Float, CultureInfo.InvariantCulture, out float y);
+            float.TryParse(split[2], NumberStyles.Float, CultureInfo.InvariantCulture, out float z);
+            return new Vector3(x, y, z);
+        }
+
+        private static Vector4 ParseVector4(string raw)
+        {
+            if (string.IsNullOrEmpty(raw)) return Vector4.zero;
+            string[] split = raw.Split(',');
+            if (split.Length < 4) return Vector4.zero;
+            float.TryParse(split[0], NumberStyles.Float, CultureInfo.InvariantCulture, out float x);
+            float.TryParse(split[1], NumberStyles.Float, CultureInfo.InvariantCulture, out float y);
+            float.TryParse(split[2], NumberStyles.Float, CultureInfo.InvariantCulture, out float z);
+            float.TryParse(split[3], NumberStyles.Float, CultureInfo.InvariantCulture, out float w);
+            return new Vector4(x, y, z, w);
+        }
+
+        private static Color ParseColor(string raw)
+        {
+            if (string.IsNullOrEmpty(raw)) return Color.white;
+            string[] split = raw.Split(',');
+            if (split.Length < 4) return Color.white;
+            float.TryParse(split[0], NumberStyles.Float, CultureInfo.InvariantCulture, out float r);
+            float.TryParse(split[1], NumberStyles.Float, CultureInfo.InvariantCulture, out float g);
+            float.TryParse(split[2], NumberStyles.Float, CultureInfo.InvariantCulture, out float b);
+            float.TryParse(split[3], NumberStyles.Float, CultureInfo.InvariantCulture, out float a);
+            return new Color(r, g, b, a);
+        }
+
         private static UnityEngine.Object ResolveStoredAsset(string stored, Type type)
         {
             if (string.IsNullOrEmpty(stored)) return null;
@@ -333,11 +445,20 @@ namespace Ulink.Editor
             return string.IsNullOrEmpty(path) ? null : AssetDatabase.LoadAssetAtPath(path, type);
         }
 
-        private static List<FieldInfo> GetUlinkPropertyFields(Type componentType) =>
-            componentType
-                .GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
-                .Where(f => f.GetCustomAttribute<UlinkPropertyAttribute>() != null)
-                .ToList();
+        private static List<FieldInfo> GetUlinkPropertyFields(Type componentType)
+        {
+            var result = new List<FieldInfo>();
+            var type = componentType;
+            while (type != null && type != typeof(object))
+            {
+                var fields = type.GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic |
+                    BindingFlags.DeclaredOnly);
+                result.AddRange(fields.Where(field => field.GetCustomAttribute<UlinkPropertyAttribute>() != null));
+                type = type.BaseType;
+            }
+
+            return result;
+        }
 
         private Type GetElementType()
         {

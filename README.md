@@ -26,7 +26,7 @@ Ulink lets you attach reusable logic components to UI elements defined in UXML. 
 - **Element marking** — Add `[UlinkElement]` to a `VisualElement` class to enable component injection.
 - **Inspector drawer** — Search, add, configure, and remove components through a dedicated property drawer.
 - **Serialized properties** — Mark fields with `[UlinkProperty]` to expose them for configuration in the Inspector.
-- **Runtime-only components** — Add `[UlinkRuntime]` to a component class to skip it during editor-time execution.
+- **Runtime-only components** — Add `[UlinkRuntimeOnly]` to a component class to skip it during editor-time execution.
 - **Manual initialization** — Use `UlinkExtensions.Initialize<T>()` to initialize a component outside the normal Ulink lifecycle.
 
 ---
@@ -128,16 +128,20 @@ public class ThresholdComponent : IUlinkComponent<VisualElement>
 | `double` |                                    |
 | `long` |                                    |
 | `bool` |                                    |
+| `Vector2` |                                    |
+| `Vector3` |                                    |
+| `Vector4` |                                    |
+| `Color` |                                    |
 | Any `enum` | Parsed by name                     |
-| Any `UnityEngine.Object` subclass | Loaded via asset path;             |
+| Any `UnityEngine.Object` subclass | Resolved via `UlinkAssetRegistry` at runtime; loaded via asset path in the Editor |
 | Other types | Attempted via `Convert.ChangeType()` |
 
 ### 5. Runtime-Only Components
 
-Add `[UlinkRuntime]` to a component class to prevent it from running in the Editor:
+Add `[UlinkRuntimeOnly]` to a component class to prevent it from running in the Editor:
 
 ```csharp
-[UlinkRuntime]
+[UlinkRuntimeOnly]
 public class ScoreComponent : IUlinkComponent<Label>
 {
     // This component will only run at runtime, not in edit mode.
@@ -164,7 +168,7 @@ This calls `Setup`, then hooks `OnAttach` and `OnDetach` to the element's panel 
 A complete component that tracks a score and updates a label:
 
 ```csharp
-[UlinkRuntime]
+[UlinkRuntimeOnly]
 public class ScoreComponent : IUlinkComponent<Label>
 {
     [UlinkProperty] public string prefix = "Score: ";
@@ -197,14 +201,24 @@ Then open the element in the UI Builder, add `ScoreComponent` via the Inspector 
 
 ---
 
+## UlinkAssetRegistry
+
+`UlinkAssetRegistry` is a `ScriptableObject` that maps asset GUIDs to `UnityEngine.Object` references for runtime resolution of `[UlinkProperty]` fields typed as `UnityEngine.Object` subclasses.
+
+It is **auto-generated and kept in sync** by the Ulink generator at `Assets/Generated/Ulink/Resources/`. You do not need to create or manage it manually.
+
+This registry is required for builds that lack access to `AssetDatabase` (runtime, IL2CPP). In the Editor, asset paths are used directly and the registry is not needed.
+
+---
+
 ## Editor Mode Control
 
 By default, components run both at runtime and in the Editor.
 
-- **Global**: Toggle "**Run In Editor**" in the Ulink project settings.
-- **Per-component**: Add `[UlinkRuntime]` to the component class.
+- **Global**: Toggle "**Run In Editor**" in **Edit → Project Settings → Leo's Tools/Ulink**. You can also trigger generation manually via **Tools/Leo's Tools/Ulink/Generate**.
+- **Per-component**: Add `[UlinkRuntimeOnly]` to the component class.
 
-`[UlinkRuntime]` takes precedence over the global setting for that component.
+`[UlinkRuntimeOnly]` takes precedence over the global setting for that component.
 
 ---
 
