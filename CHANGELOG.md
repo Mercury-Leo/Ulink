@@ -4,6 +4,17 @@ All notable changes to Ulink will be documented here.
 
 ---
 
+## [0.8.3]
+
+### Added
+- `Vector2`, `Vector3`, `Vector4`, and `Color` as supported `[UlinkProperty]` field types (injector + Inspector drawer).
+- `UlinkAssetRegistry` ScriptableObject for runtime GUID-to-asset resolution; auto-synced by the generator from UXML references.
+
+### Changed
+- Renamed `[UlinkRuntime]` attribute to `[UlinkRuntimeOnly]`.
+
+---
+
 ## [0.8.0]
 
 ### Added
