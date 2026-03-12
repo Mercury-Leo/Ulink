@@ -72,7 +72,7 @@ namespace Ulink.Editor
             SetDefineForCurrentTarget(target, symbol, enable);
         }
 
-        public static void SetDefineForCurrentTarget(NamedBuildTarget target, string symbol, bool enable)
+        private static void SetDefineForCurrentTarget(NamedBuildTarget target, string symbol, bool enable)
         {
             PlayerSettings.GetScriptingDefineSymbols(target, out string[]? symbols);
 
@@ -87,7 +87,7 @@ namespace Ulink.Editor
             PlayerSettings.SetScriptingDefineSymbols(target, set.ToArray());
         }
 
-        public static NamedBuildTarget GetCurrentTarget()
+        private static NamedBuildTarget GetCurrentTarget()
         {
             var target = EditorUserBuildSettings.activeBuildTarget;
             var group = BuildPipeline.GetBuildTargetGroup(target);

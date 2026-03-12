@@ -6,7 +6,7 @@ namespace Ulink.Editor
 {
     internal sealed class UlinkSettingsProvider : SettingsProvider
     {
-        public UlinkSettingsProvider(string path, SettingsScope scopes, IEnumerable<string> keywords = null) : base(
+        private UlinkSettingsProvider(string path, SettingsScope scopes, IEnumerable<string> keywords = null) : base(
             path, scopes, keywords) { }
 
         public override void OnActivate(string searchContext, VisualElement rootElement)
@@ -30,9 +30,11 @@ namespace Ulink.Editor
             var disableAutoGen = new Toggle("Disable Automatic Generation")
             {
                 value = settings.DisableAutomaticGeneration,
-                tooltip = "When enabled, Ulink will not auto-generate on compilation or asset changes. Use the Generate button to generate manually."
+                tooltip =
+                    "When enabled, Ulink will not auto-generate on compilation or asset changes. Use the Generate button to generate manually."
             };
-            disableAutoGen.RegisterValueChangedCallback(value => UlinkSettings.instance.DisableAutomaticGeneration = value.newValue);
+            disableAutoGen.RegisterValueChangedCallback(value =>
+                UlinkSettings.instance.DisableAutomaticGeneration = value.newValue);
             rootElement.Add(disableAutoGen);
 
             var generateButton =

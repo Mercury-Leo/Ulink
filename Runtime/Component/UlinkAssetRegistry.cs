@@ -30,7 +30,7 @@ namespace Ulink.Runtime
 
         public UnityEngine.Object? Get(string guid)
         {
-            _lookup ??= Entries.ToDictionary(entry => entry.guid, e => e.asset);
+            _lookup ??= Entries.ToDictionary(entry => entry.guid, entry => entry.asset);
             return _lookup.GetValueOrDefault(guid);
         }
     }
