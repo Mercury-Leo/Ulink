@@ -239,6 +239,78 @@ namespace Ulink.Editor
                     });
                     ctrl = objField;
                 }
+                else if (fieldType.IsEnum)
+                {
+                    var enumNames = Enum.GetNames(fieldType).ToList();
+                    string initialName = enumNames.Contains(current) ? current : enumNames[0];
+                    var dropdown = new DropdownField(enumNames, initialName) { style = { flexGrow = 1 } };
+                    dropdown.RegisterValueChangedCallback(evt =>
+                        SetComponentPropertyValue(aqn, field.Name, evt.newValue));
+                    ctrl = dropdown;
+                }
+                else if (fieldType == typeof(Vector2))
+                {
+                    var v = ParseVector2(current);
+                    var container = new VisualElement { style = { flexDirection = FlexDirection.Row, flexGrow = 1 } };
+                    var xField = new FloatField("X") { value = v.x, isDelayed = true, style = { flexGrow = 1 } };
+                    var yField = new FloatField("Y") { value = v.y, isDelayed = true, style = { flexGrow = 1 } };
+                    void SaveVec2() => SetComponentPropertyValue(aqn, field.Name,
+                        $"{xField.value.ToString(CultureInfo.InvariantCulture)},{yField.value.ToString(CultureInfo.InvariantCulture)}");
+                    xField.RegisterValueChangedCallback(_ => SaveVec2());
+                    yField.RegisterValueChangedCallback(_ => SaveVec2());
+                    container.Add(xField);
+                    container.Add(yField);
+                    ctrl = container;
+                }
+                else if (fieldType == typeof(Vector3))
+                {
+                    var v = ParseVector3(current);
+                    var container = new VisualElement { style = { flexDirection = FlexDirection.Row, flexGrow = 1 } };
+                    var xField = new FloatField("X") { value = v.x, isDelayed = true, style = { flexGrow = 1 } };
+                    var yField = new FloatField("Y") { value = v.y, isDelayed = true, style = { flexGrow = 1 } };
+                    var zField = new FloatField("Z") { value = v.z, isDelayed = true, style = { flexGrow = 1 } };
+                    void SaveVec3() => SetComponentPropertyValue(aqn, field.Name,
+                        $"{xField.value.ToString(CultureInfo.InvariantCulture)},{yField.value.ToString(CultureInfo.InvariantCulture)},{zField.value.ToString(CultureInfo.InvariantCulture)}");
+                    xField.RegisterValueChangedCallback(_ => SaveVec3());
+                    yField.RegisterValueChangedCallback(_ => SaveVec3());
+                    zField.RegisterValueChangedCallback(_ => SaveVec3());
+                    container.Add(xField);
+                    container.Add(yField);
+                    container.Add(zField);
+                    ctrl = container;
+                }
+                else if (fieldType == typeof(Vector4))
+                {
+                    var v = ParseVector4(current);
+                    var container = new VisualElement { style = { flexDirection = FlexDirection.Row, flexGrow = 1 } };
+                    var xField = new FloatField("X") { value = v.x, isDelayed = true, style = { flexGrow = 1 } };
+                    var yField = new FloatField("Y") { value = v.y, isDelayed = true, style = { flexGrow = 1 } };
+                    var zField = new FloatField("Z") { value = v.z, isDelayed = true, style = { flexGrow = 1 } };
+                    var wField = new FloatField("W") { value = v.w, isDelayed = true, style = { flexGrow = 1 } };
+                    void SaveVec4() => SetComponentPropertyValue(aqn, field.Name,
+                        $"{xField.value.ToString(CultureInfo.InvariantCulture)},{yField.value.ToString(CultureInfo.InvariantCulture)},{zField.value.ToString(CultureInfo.InvariantCulture)},{wField.value.ToString(CultureInfo.InvariantCulture)}");
+                    xField.RegisterValueChangedCallback(_ => SaveVec4());
+                    yField.RegisterValueChangedCallback(_ => SaveVec4());
+                    zField.RegisterValueChangedCallback(_ => SaveVec4());
+                    wField.RegisterValueChangedCallback(_ => SaveVec4());
+                    container.Add(xField);
+                    container.Add(yField);
+                    container.Add(zField);
+                    container.Add(wField);
+                    ctrl = container;
+                }
+                else if (fieldType == typeof(Color))
+                {
+                    var c = ParseColor(current);
+                    var colorField = new UnityEditor.UIElements.ColorField { value = c, style = { flexGrow = 1 } };
+                    colorField.RegisterValueChangedCallback(evt =>
+                    {
+                        var col = evt.newValue;
+                        SetComponentPropertyValue(aqn, field.Name,
+                            $"{col.r.ToString(CultureInfo.InvariantCulture)},{col.g.ToString(CultureInfo.InvariantCulture)},{col.b.ToString(CultureInfo.InvariantCulture)},{col.a.ToString(CultureInfo.InvariantCulture)}");
+                    });
+                    ctrl = colorField;
+                }
                 else
                 {
                     var f = new TextField { value = current, isDelayed = true, style = { flexGrow = 1 } };
@@ -306,7 +378,7 @@ namespace Ulink.Editor
                     section.Add(row);
 
                     // Runtime-only notice
-                    if (resolved != null && resolved.GetCustomAttribute<UlinkRuntimeOnlyAttribute>() != null)
+                    if (resolved?.GetCustomAttribute<UlinkRuntimeOnlyAttribute>() != null)
                     {
                         section.Add(new HelpBox("Runtime only — not active in editor.", HelpBoxMessageType.Info));
                     }
@@ -324,6 +396,51 @@ namespace Ulink.Editor
         }
 
         // ── Static helpers ────────────────────────────────────────────────────
+
+        private static Vector2 ParseVector2(string raw)
+        {
+            if (string.IsNullOrEmpty(raw)) return Vector2.zero;
+            string[] split = raw.Split(',');
+            if (split.Length < 2) return Vector2.zero;
+            float.TryParse(split[0], NumberStyles.Float, CultureInfo.InvariantCulture, out float x);
+            float.TryParse(split[1], NumberStyles.Float, CultureInfo.InvariantCulture, out float y);
+            return new Vector2(x, y);
+        }
+
+        private static Vector3 ParseVector3(string raw)
+        {
+            if (string.IsNullOrEmpty(raw)) return Vector3.zero;
+            string[] split = raw.Split(',');
+            if (split.Length < 3) return Vector3.zero;
+            float.TryParse(split[0], NumberStyles.Float, CultureInfo.InvariantCulture, out float x);
+            float.TryParse(split[1], NumberStyles.Float, CultureInfo.InvariantCulture, out float y);
+            float.TryParse(split[2], NumberStyles.Float, CultureInfo.InvariantCulture, out float z);
+            return new Vector3(x, y, z);
+        }
+
+        private static Vector4 ParseVector4(string raw)
+        {
+            if (string.IsNullOrEmpty(raw)) return Vector4.zero;
+            string[] split = raw.Split(',');
+            if (split.Length < 4) return Vector4.zero;
+            float.TryParse(split[0], NumberStyles.Float, CultureInfo.InvariantCulture, out float x);
+            float.TryParse(split[1], NumberStyles.Float, CultureInfo.InvariantCulture, out float y);
+            float.TryParse(split[2], NumberStyles.Float, CultureInfo.InvariantCulture, out float z);
+            float.TryParse(split[3], NumberStyles.Float, CultureInfo.InvariantCulture, out float w);
+            return new Vector4(x, y, z, w);
+        }
+
+        private static Color ParseColor(string raw)
+        {
+            if (string.IsNullOrEmpty(raw)) return Color.white;
+            string[] split = raw.Split(',');
+            if (split.Length < 4) return Color.white;
+            float.TryParse(split[0], NumberStyles.Float, CultureInfo.InvariantCulture, out float r);
+            float.TryParse(split[1], NumberStyles.Float, CultureInfo.InvariantCulture, out float g);
+            float.TryParse(split[2], NumberStyles.Float, CultureInfo.InvariantCulture, out float b);
+            float.TryParse(split[3], NumberStyles.Float, CultureInfo.InvariantCulture, out float a);
+            return new Color(r, g, b, a);
+        }
 
         private static UnityEngine.Object ResolveStoredAsset(string stored, Type type)
         {

@@ -2,7 +2,6 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
-using System.Linq;
 using System.Reflection;
 
 namespace Ulink.Runtime
@@ -34,9 +33,10 @@ namespace Ulink.Runtime
                     object? converted = ConvertValue(rawValue, field.FieldType);
                     if (converted != null) field.SetValue(instance, converted);
                 }
-                catch
+                catch (Exception ex)
                 {
-                    /* skip on conversion or set failure */
+                    UnityEngine.Debug.LogWarning(
+                        $"[Ulink] Failed to inject field '{field.Name}' on '{type.Name}': {ex.Message}");
                 }
             }
         }
@@ -63,6 +63,11 @@ namespace Ulink.Runtime
                 }
             }
 
+            if (target == typeof(UnityEngine.Vector2)) return ParseVector2(raw);
+            if (target == typeof(UnityEngine.Vector3)) return ParseVector3(raw);
+            if (target == typeof(UnityEngine.Vector4)) return ParseVector4(raw);
+            if (target == typeof(UnityEngine.Color)) return ParseColor(raw);
+
             if (typeof(UnityEngine.Object).IsAssignableFrom(target))
             {
                 if (string.IsNullOrEmpty(raw)) return null;
@@ -86,14 +91,60 @@ namespace Ulink.Runtime
             }
         }
 
-        private static FieldInfo[] GetInjectableFields(Type type)
+        private static FieldInfo[] GetInjectableFields(Type fieldType)
         {
-            if (FieldCache.TryGetValue(type, out var cached)) return cached;
-            var fields = type.GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
-                .Where(field => field.GetCustomAttribute<UlinkPropertyAttribute>() != null)
-                .ToArray();
-            FieldCache[type] = fields;
+            if (FieldCache.TryGetValue(fieldType, out var cached)) return cached;
+            var result = new List<FieldInfo>();
+            var type = fieldType;
+            while (type != null && type != typeof(object))
+            {
+                foreach (var f in type.GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic |
+                    BindingFlags.DeclaredOnly))
+                    if (f.GetCustomAttribute<UlinkPropertyAttribute>() != null)
+                        result.Add(f);
+                type = type.BaseType;
+            }
+
+            var fields = result.ToArray();
+            FieldCache[fieldType] = fields;
             return fields;
+        }
+
+        private static UnityEngine.Vector2 ParseVector2(string raw)
+        {
+            string[]? split = raw.Split(',');
+            return new UnityEngine.Vector2(
+                float.Parse(split[0], CultureInfo.InvariantCulture),
+                float.Parse(split[1], CultureInfo.InvariantCulture));
+        }
+
+        private static UnityEngine.Vector3 ParseVector3(string raw)
+        {
+            string[]? split = raw.Split(',');
+            return new UnityEngine.Vector3(
+                float.Parse(split[0], CultureInfo.InvariantCulture),
+                float.Parse(split[1], CultureInfo.InvariantCulture),
+                float.Parse(split[2], CultureInfo.InvariantCulture));
+        }
+
+        private static UnityEngine.Vector4 ParseVector4(string raw)
+        {
+            string[]? split = raw.Split(',');
+            return new UnityEngine.Vector4(
+                float.Parse(split[0], CultureInfo.InvariantCulture),
+                float.Parse(split[1], CultureInfo.InvariantCulture),
+                float.Parse(split[2], CultureInfo.InvariantCulture),
+                float.Parse(split[3], CultureInfo.InvariantCulture));
+        }
+
+        private static UnityEngine.Color ParseColor(string raw)
+        {
+            string[]? split = raw.Split(',');
+            return new UnityEngine.Color(
+                float.Parse(split[0], CultureInfo.InvariantCulture),
+                float.Parse(split[1], CultureInfo.InvariantCulture),
+                float.Parse(split[2], CultureInfo.InvariantCulture),
+                float.Parse(split[3], CultureInfo.InvariantCulture));
         }
     }
 }
