@@ -23,6 +23,12 @@ namespace Ulink.Runtime
 
         [SerializeField] public string TypeNamesRaw;
 
+        // ── Types cache ──────────────────────────────────────────────────────
+        // Avoids re-resolving Type.GetType() on every access when TypeNamesRaw hasn't changed.
+        // Keyed on the types section of the raw string (before \uE000).
+        [NonSerialized] private Type?[]? _typesCache;
+        [NonSerialized] private string? _typesCacheKey;
+
         // ── Public API ────────────────────────────────────────────────────────
 
         public string[] TypeNames
@@ -34,7 +40,21 @@ namespace Ulink.Runtime
             }
         }
 
-        public Type?[] Types => TypeNames.Select(Type.GetType).ToArray();
+        public Type?[] Types
+        {
+            get
+            {
+                string key = TypesSection(TypeNamesRaw);
+                if (_typesCache != null && key == _typesCacheKey)
+                    return _typesCache;
+
+                _typesCacheKey = key;
+                _typesCache = string.IsNullOrEmpty(key)
+                    ? Array.Empty<Type?>()
+                    : key.Split(TypeSeparator).Select(Type.GetType).ToArray();
+                return _typesCache;
+            }
+        }
 
         public static UlinkComponentsType Empty { get; } = new() { TypeNamesRaw = string.Empty };
 
@@ -51,14 +71,7 @@ namespace Ulink.Runtime
                 if (separator < 0) continue;
                 if (entry[..separator] != assemblyQualifiedName) continue;
 
-                foreach (string? field in entry[(separator + 1)..].Split(FieldSeparator))
-                {
-                    if (string.IsNullOrEmpty(field)) continue;
-                    int eq = field.IndexOf('=');
-                    if (eq < 0) continue;
-                    result[field[..eq]] = field[(eq + 1)..];
-                }
-
+                ParseFieldPairs(entry[(separator + 1)..], result);
                 break;
             }
 
@@ -101,15 +114,7 @@ namespace Ulink.Runtime
 
                 string aqn = entry[..separator];
                 var fields = new Dictionary<string, string>();
-
-                foreach (string? field in entry[(separator + 1)..].Split(FieldSeparator))
-                {
-                    if (string.IsNullOrEmpty(field)) continue;
-                    int eq = field.IndexOf('=');
-                    if (eq < 0) continue;
-                    fields[field[..eq]] = field[(eq + 1)..];
-                }
-
+                ParseFieldPairs(entry[(separator + 1)..], fields);
                 result[aqn] = fields;
             }
 
@@ -130,6 +135,18 @@ namespace Ulink.Runtime
                 });
 
             return string.Join(ComponentSeparator.ToString(), entries);
+        }
+
+        /// <summary>Parses "key=value" pairs separated by FieldSeparator into the target dictionary.</summary>
+        private static void ParseFieldPairs(string fieldData, Dictionary<string, string> target)
+        {
+            foreach (string? field in fieldData.Split(FieldSeparator))
+            {
+                if (string.IsNullOrEmpty(field)) continue;
+                int eq = field.IndexOf('=');
+                if (eq < 0) continue;
+                target[field[..eq]] = field[(eq + 1)..];
+            }
         }
     }
 }
