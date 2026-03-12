@@ -333,11 +333,20 @@ namespace Ulink.Editor
             return string.IsNullOrEmpty(path) ? null : AssetDatabase.LoadAssetAtPath(path, type);
         }
 
-        private static List<FieldInfo> GetUlinkPropertyFields(Type componentType) =>
-            componentType
-                .GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
-                .Where(f => f.GetCustomAttribute<UlinkPropertyAttribute>() != null)
-                .ToList();
+        private static List<FieldInfo> GetUlinkPropertyFields(Type componentType)
+        {
+            var result = new List<FieldInfo>();
+            var type = componentType;
+            while (type != null && type != typeof(object))
+            {
+                var fields = type.GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic |
+                    BindingFlags.DeclaredOnly);
+                result.AddRange(fields.Where(field => field.GetCustomAttribute<UlinkPropertyAttribute>() != null));
+                type = type.BaseType;
+            }
+
+            return result;
+        }
 
         private Type GetElementType()
         {
