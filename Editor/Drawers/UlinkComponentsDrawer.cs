@@ -252,51 +252,36 @@ namespace Ulink.Editor
                 {
                     var v = ParseVector2(current);
                     var container = new VisualElement { style = { flexDirection = FlexDirection.Row, flexGrow = 1 } };
-                    var xField = new FloatField("X") { value = v.x, isDelayed = true, style = { flexGrow = 1 } };
-                    var yField = new FloatField("Y") { value = v.y, isDelayed = true, style = { flexGrow = 1 } };
+                    float cx = v.x, cy = v.y;
                     void SaveVec2() => SetComponentPropertyValue(aqn, field.Name,
-                        $"{xField.value.ToString(CultureInfo.InvariantCulture)},{yField.value.ToString(CultureInfo.InvariantCulture)}");
-                    xField.RegisterValueChangedCallback(_ => SaveVec2());
-                    yField.RegisterValueChangedCallback(_ => SaveVec2());
-                    container.Add(xField);
-                    container.Add(yField);
+                        $"{cx.ToString(CultureInfo.InvariantCulture)},{cy.ToString(CultureInfo.InvariantCulture)}");
+                    container.Add(MakeEntry("X", v.x, val => { cx = val; SaveVec2(); }));
+                    container.Add(MakeEntry("Y", v.y, val => { cy = val; SaveVec2(); }));
                     ctrl = container;
                 }
                 else if (fieldType == typeof(Vector3))
                 {
                     var v = ParseVector3(current);
                     var container = new VisualElement { style = { flexDirection = FlexDirection.Row, flexGrow = 1 } };
-                    var xField = new FloatField("X") { value = v.x, isDelayed = true, style = { flexGrow = 1 } };
-                    var yField = new FloatField("Y") { value = v.y, isDelayed = true, style = { flexGrow = 1 } };
-                    var zField = new FloatField("Z") { value = v.z, isDelayed = true, style = { flexGrow = 1 } };
+                    float cx = v.x, cy = v.y, cz = v.z;
                     void SaveVec3() => SetComponentPropertyValue(aqn, field.Name,
-                        $"{xField.value.ToString(CultureInfo.InvariantCulture)},{yField.value.ToString(CultureInfo.InvariantCulture)},{zField.value.ToString(CultureInfo.InvariantCulture)}");
-                    xField.RegisterValueChangedCallback(_ => SaveVec3());
-                    yField.RegisterValueChangedCallback(_ => SaveVec3());
-                    zField.RegisterValueChangedCallback(_ => SaveVec3());
-                    container.Add(xField);
-                    container.Add(yField);
-                    container.Add(zField);
+                        $"{cx.ToString(CultureInfo.InvariantCulture)},{cy.ToString(CultureInfo.InvariantCulture)},{cz.ToString(CultureInfo.InvariantCulture)}");
+                    container.Add(MakeEntry("X", v.x, val => { cx = val; SaveVec3(); }));
+                    container.Add(MakeEntry("Y", v.y, val => { cy = val; SaveVec3(); }));
+                    container.Add(MakeEntry("Z", v.z, val => { cz = val; SaveVec3(); }));
                     ctrl = container;
                 }
                 else if (fieldType == typeof(Vector4))
                 {
                     var v = ParseVector4(current);
                     var container = new VisualElement { style = { flexDirection = FlexDirection.Row, flexGrow = 1 } };
-                    var xField = new FloatField("X") { value = v.x, isDelayed = true, style = { flexGrow = 1 } };
-                    var yField = new FloatField("Y") { value = v.y, isDelayed = true, style = { flexGrow = 1 } };
-                    var zField = new FloatField("Z") { value = v.z, isDelayed = true, style = { flexGrow = 1 } };
-                    var wField = new FloatField("W") { value = v.w, isDelayed = true, style = { flexGrow = 1 } };
+                    float cx = v.x, cy = v.y, cz = v.z, cw = v.w;
                     void SaveVec4() => SetComponentPropertyValue(aqn, field.Name,
-                        $"{xField.value.ToString(CultureInfo.InvariantCulture)},{yField.value.ToString(CultureInfo.InvariantCulture)},{zField.value.ToString(CultureInfo.InvariantCulture)},{wField.value.ToString(CultureInfo.InvariantCulture)}");
-                    xField.RegisterValueChangedCallback(_ => SaveVec4());
-                    yField.RegisterValueChangedCallback(_ => SaveVec4());
-                    zField.RegisterValueChangedCallback(_ => SaveVec4());
-                    wField.RegisterValueChangedCallback(_ => SaveVec4());
-                    container.Add(xField);
-                    container.Add(yField);
-                    container.Add(zField);
-                    container.Add(wField);
+                        $"{cx.ToString(CultureInfo.InvariantCulture)},{cy.ToString(CultureInfo.InvariantCulture)},{cz.ToString(CultureInfo.InvariantCulture)},{cw.ToString(CultureInfo.InvariantCulture)}");
+                    container.Add(MakeEntry("X", v.x, val => { cx = val; SaveVec4(); }));
+                    container.Add(MakeEntry("Y", v.y, val => { cy = val; SaveVec4(); }));
+                    container.Add(MakeEntry("Z", v.z, val => { cz = val; SaveVec4(); }));
+                    container.Add(MakeEntry("W", v.w, val => { cw = val; SaveVec4(); }));
                     ctrl = container;
                 }
                 else if (fieldType == typeof(Color))
@@ -321,6 +306,16 @@ namespace Ulink.Editor
 
                 row.Add(ctrl);
                 return row;
+
+                VisualElement MakeEntry(string lbl, float init, Action<float> onChange)
+                {
+                    var sub = new VisualElement { style = { flexDirection = FlexDirection.Row, flexGrow = 1 } };
+                    sub.Add(new Label(lbl) { style = { width = 14, unityTextAlign = TextAnchor.MiddleLeft } });
+                    var f = new FloatField { value = init, isDelayed = true, style = { flexGrow = 1, minWidth = 30 } };
+                    f.RegisterValueChangedCallback(evt => onChange(evt.newValue));
+                    sub.Add(f);
+                    return sub;
+                }
             }
 
             // ── List ──────────────────────────────────────────────────────────
