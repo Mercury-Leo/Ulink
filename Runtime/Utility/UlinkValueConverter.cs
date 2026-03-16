@@ -7,7 +7,7 @@ using UnityEngine;
 namespace Ulink.Runtime
 {
     /// <summary>
-    /// Converts a raw string value into a typed object for [UlinkProperty] injection.
+    /// Converts a raw string value into a typed object for [UlinkSerializable] injection.
     /// Primitives use a dictionary lookup; enums, UnityEngine.Object, and unknown types
     /// have special-case handling. Returns null on conversion failure (caller skips the field).
     /// </summary>

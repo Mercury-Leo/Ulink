@@ -74,13 +74,13 @@ namespace Ulink.Editor
 
         /// <summary>
         /// Scans every UXML file in the project for ulink-components attributes, then collects
-        /// the GUIDs of any UnityEngine.Object fields referenced by [UlinkProperty] so they can
+        /// the GUIDs of any UnityEngine.Object fields referenced by [UlinkSerializable] so they can
         /// be included in the UlinkAssetRegistry for runtime resolution (where AssetDatabase is unavailable).
         /// </summary>
         private static Dictionary<string, UnityEngine.Object> CollectAssetGuidsFromUxml()
         {
             var collectedGuids = new Dictionary<string, UnityEngine.Object>();
-            var fieldCache = new Dictionary<Type, FieldInfo[]>(); // local cache — only Object-typed [UlinkProperty] fields
+            var fieldCache = new Dictionary<Type, FieldInfo[]>(); // local cache — only Object-typed [UlinkSerializable] fields
 
             string[] uxmlGuids = AssetDatabase.FindAssets("t:VisualTreeAsset");
             foreach (string uxmlGuid in uxmlGuids)
@@ -129,7 +129,7 @@ namespace Ulink.Editor
 
                         if (!fieldCache.TryGetValue(type, out var ulinkObjectFields))
                         {
-                            ulinkObjectFields = UlinkFieldDiscovery.GetUlinkPropertyFields(type)
+                            ulinkObjectFields = UlinkFieldDiscovery.GetUlinkSerializableFields(type)
                                 .Where(f => typeof(UnityEngine.Object).IsAssignableFrom(f.FieldType))
                                 .ToArray();
                             fieldCache[type] = ulinkObjectFields;
@@ -432,7 +432,7 @@ namespace Ulink.Editor
             writer.Line("else _baseComponents.Add(baseComp!);");
             writer.Line();
             writer.Line(
-                $"{nameof(UlinkPropertyInjector)}.{nameof(UlinkPropertyInjector.Inject)}(instance!, value, type.AssemblyQualifiedName);");
+                $"{nameof(UlinkSerializableInjector)}.{nameof(UlinkSerializableInjector.Inject)}(instance!, value, type.AssemblyQualifiedName);");
             writer.Line();
             writer.Line("instanceType?.Setup(this);");
             writer.Line("baseComp?.Setup(this);");

@@ -18,7 +18,7 @@ All notable changes to Ulink will be documented here.
 ## [0.8.3]
 
 ### Added
-- `Vector2`, `Vector3`, `Vector4`, and `Color` as supported `[UlinkProperty]` field types (injector + Inspector drawer).
+- `Vector2`, `Vector3`, `Vector4`, and `Color` as supported `[UlinkSerializable]` field types (injector + Inspector drawer).
 - `UlinkAssetRegistry` ScriptableObject for runtime GUID-to-asset resolution; auto-synced by the generator from UXML references.
 
 ### Changed
@@ -31,7 +31,7 @@ All notable changes to Ulink will be documented here.
 ### Added
 - `IUlinkComponent<T>` generic interface (and non-generic `IUlinkComponent`) — replaces `IUlinkController`.
 - `[UlinkElement]` attribute — marks a `VisualElement` class for component injection.
-- `[UlinkProperty]` attribute — marks fields for serialized configuration in the Inspector drawer.
+- `[UlinkSerializable]` attribute — marks fields for serialized configuration in the Inspector drawer.
 - `[UlinkRuntime]` attribute — marks a component as runtime-only; replaces the `RuntimeOnly` property.
 - Inspector property drawer for component management: search, add, configure, and remove components.
 - Multiple components per element — compose behavior from independent, focused components.
