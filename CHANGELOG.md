@@ -4,6 +4,17 @@ All notable changes to Ulink will be documented here.
 
 ---
 
+## [0.8.5]
+
+### Added
+- Generated `TryGetComponents<TComponent>()` and `TryGetComponents<TComponent>(List<TComponent>)`
+  with Unity-style equivalents on the generated `ComponentsType`:
+  - `GetComponent<TComponent>()` — returns first match or `null`
+  - `GetComponents<TComponent>()` — returns all matches as `TComponent[]`
+  - `GetComponents<TComponent>(List<TComponent> results)` — fill-in-place, no allocation
+
+---
+
 ## [0.8.3]
 
 ### Added
