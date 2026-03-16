@@ -15,6 +15,17 @@ All notable changes to Ulink will be documented here.
 
 ---
 
+## [0.8.6]
+
+### Added
+- `LocalizedString` support for `[UlinkSerializable]` fields (requires `com.unity.localization`).
+  - Inspector drawer uses Unity's built-in `PropertyField` for table/entry selection.
+  - Runtime converter automatically reconstructs the `LocalizedString` from stored data.
+  - Both the editor and runtime bridges are compiled only when the `ULINK_LOCALIZATION`
+    scripting define is active, so the Localization package remains an optional dependency.
+
+---
+
 ## [0.8.3]
 
 ### Added
