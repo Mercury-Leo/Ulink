@@ -9,17 +9,9 @@ namespace Ulink.Runtime
     [Serializable]
     public struct UlinkComponentsType
     {
-        // ── Separators ────────────────────────────────────────────────────────
-        // All separators are Unicode Private Use Area characters (U+E000–U+F8FF).
-        // They are valid XML 1.0, never appear in C# AQNs, and won't be typed by users.
-        //
         // TypeNamesRaw layout:
         //   "{aqn1};{aqn2}\uE000{component-data-section}"
-        private const char TypeSeparator = ';'; // between AQNs (plain ASCII, valid XML)
-        private const char SectionSeparator = '\uE000'; // between types section and data section
-        private const char ComponentSeparator = '\uE001'; // between per-component entries in data section
-        private const char DataSeparator = '\uE002'; // between AQN and its field data
-        private const char FieldSeparator = '\uE003'; // between individual field=value pairs
+        // Separator definitions live in UlinkSeparators.
 
         [SerializeField] public string TypeNamesRaw;
 
@@ -36,7 +28,7 @@ namespace Ulink.Runtime
             get
             {
                 string part = TypesSection(TypeNamesRaw);
-                return string.IsNullOrEmpty(part) ? Array.Empty<string>() : part.Split(TypeSeparator);
+                return string.IsNullOrEmpty(part) ? Array.Empty<string>() : part.Split(UlinkSeparators.TypeSeparator);
             }
         }
 
@@ -51,7 +43,7 @@ namespace Ulink.Runtime
                 _typesCacheKey = key;
                 _typesCache = string.IsNullOrEmpty(key)
                     ? Array.Empty<Type?>()
-                    : key.Split(TypeSeparator).Select(Type.GetType).ToArray();
+                    : key.Split(UlinkSeparators.TypeSeparator).Select(Type.GetType).ToArray();
                 return _typesCache;
             }
         }
@@ -65,9 +57,9 @@ namespace Ulink.Runtime
             string data = DataSection(TypeNamesRaw);
             if (string.IsNullOrEmpty(data)) return result;
 
-            foreach (string? entry in data.Split(ComponentSeparator))
+            foreach (string? entry in data.Split(UlinkSeparators.ComponentSeparator))
             {
-                int separator = entry.IndexOf(DataSeparator);
+                int separator = entry.IndexOf(UlinkSeparators.DataSeparator);
                 if (separator < 0) continue;
                 if (entry[..separator] != assemblyQualifiedName) continue;
 
@@ -84,7 +76,7 @@ namespace Ulink.Runtime
         public static string TypesSection(string raw)
         {
             if (string.IsNullOrEmpty(raw)) return string.Empty;
-            int idx = raw.IndexOf(SectionSeparator);
+            int idx = raw.IndexOf(UlinkSeparators.SectionSeparator);
             return idx < 0 ? raw : raw[..idx];
         }
 
@@ -92,13 +84,15 @@ namespace Ulink.Runtime
         public static string DataSection(string raw)
         {
             if (string.IsNullOrEmpty(raw)) return string.Empty;
-            int idx = raw.IndexOf(SectionSeparator);
+            int idx = raw.IndexOf(UlinkSeparators.SectionSeparator);
             return idx < 0 ? string.Empty : raw[(idx + 1)..];
         }
 
         /// <summary>Joins a types section and a data section back into a single raw string.</summary>
         public static string Combine(string typesSection, string dataSection) =>
-            string.IsNullOrEmpty(dataSection) ? typesSection : typesSection + SectionSeparator + dataSection;
+            string.IsNullOrEmpty(dataSection)
+                ? typesSection
+                : typesSection + UlinkSeparators.SectionSeparator + dataSection;
 
         /// <summary>Parses the data section of a raw string into a nested dictionary.</summary>
         public static Dictionary<string, Dictionary<string, string>> ParseAllData(string raw)
@@ -107,9 +101,9 @@ namespace Ulink.Runtime
             string data = DataSection(raw);
             if (string.IsNullOrEmpty(data)) return result;
 
-            foreach (string? entry in data.Split(ComponentSeparator))
+            foreach (string? entry in data.Split(UlinkSeparators.ComponentSeparator))
             {
-                int separator = entry.IndexOf(DataSeparator);
+                int separator = entry.IndexOf(UlinkSeparators.DataSeparator);
                 if (separator < 0) continue;
 
                 string aqn = entry[..separator];
@@ -129,18 +123,18 @@ namespace Ulink.Runtime
                 .Select(kvp =>
                 {
                     string fields = string.Join(
-                        FieldSeparator.ToString(),
+                        UlinkSeparators.FieldSeparator.ToString(),
                         kvp.Value.Select(field => $"{field.Key}={field.Value}"));
-                    return $"{kvp.Key}{DataSeparator}{fields}";
+                    return $"{kvp.Key}{UlinkSeparators.DataSeparator}{fields}";
                 });
 
-            return string.Join(ComponentSeparator.ToString(), entries);
+            return string.Join(UlinkSeparators.ComponentSeparator.ToString(), entries);
         }
 
-        /// <summary>Parses "key=value" pairs separated by FieldSeparator into the target dictionary.</summary>
+        /// <summary>Parses "key=value" pairs separated by <see cref="UlinkSeparators.FieldSeparator"/> into the target dictionary.</summary>
         private static void ParseFieldPairs(string fieldData, Dictionary<string, string> target)
         {
-            foreach (string? field in fieldData.Split(FieldSeparator))
+            foreach (string? field in fieldData.Split(UlinkSeparators.FieldSeparator))
             {
                 if (string.IsNullOrEmpty(field)) continue;
                 int eq = field.IndexOf('=');

@@ -146,7 +146,7 @@ namespace Ulink.Editor
                 }
                 else
                 {
-                    labelText = typeName;
+                    labelText = typeName.Split(',')[0].Split('.').Last();
                 }
 
                 row.Add(new Label(labelText)

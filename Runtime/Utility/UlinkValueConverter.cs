@@ -29,6 +29,9 @@ namespace Ulink.Runtime
             [typeof(Color)] = raw => UlinkParsing.ParseColor(raw, Color.white),
         };
 
+        public static void RegisterConverter(Type type, Func<string, object?> converter)
+            => Converters[type] = converter;
+
         public static object? Convert(string raw, Type target)
         {
             if (Converters.TryGetValue(target, out var converter))
