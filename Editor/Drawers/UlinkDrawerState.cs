@@ -10,7 +10,7 @@ namespace Ulink.Editor
     /// The raw string has two sections separated by \uE000: type AQN list and per-component property data.
     /// All mutations go through WriteBack which updates the SerializedProperty and applies changes.
     /// </summary>
-    internal sealed class UlinkDrawerState
+    public sealed class UlinkDrawerState
     {
         private const char TypeSeparator = ';';
 

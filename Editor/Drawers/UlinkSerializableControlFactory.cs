@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using System.Reflection;
@@ -14,8 +15,15 @@ namespace Ulink.Editor
     /// Each control reads its initial value from the drawer state and writes back on change.
     /// Object references are stored as GUIDs; vectors/colors as comma-separated floats.
     /// </summary>
-    internal static class UlinkSerializableControlFactory
+    public static class UlinkSerializableControlFactory
     {
+        private static readonly Dictionary<Type, Func<string, FieldInfo, UlinkDrawerState, VisualElement>>
+            TypeHandlers = new();
+
+        public static void RegisterTypeHandler(Type type,
+            Func<string, FieldInfo, UlinkDrawerState, VisualElement> handler)
+            => TypeHandlers[type] = handler;
+
         /// <param name="aqn">Assembly-qualified name of the component owning this field.</param>
         /// <param name="field"></param>
         /// <param name="state"></param>
@@ -38,6 +46,10 @@ namespace Ulink.Editor
 
             string current = state.GetStoredPropertyValue(aqn, field.Name);
             var fieldType = field.FieldType;
+
+            if (TypeHandlers.TryGetValue(fieldType, out var typeHandler))
+                return typeHandler(aqn, field, state);
+
             VisualElement ctrl;
 
             if (fieldType == typeof(int))

@@ -1,8 +1,9 @@
 {
-    "name": "LeosClockworks.Ulink.Runtime",
+    "name": "LeosClockworks.Ulink.Runtime.Localization",
     "rootNamespace": "",
     "references": [
-        "Unity.Properties"
+        "LeosClockworks.Ulink.Runtime",
+        "Unity.Localization"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],
@@ -10,13 +11,9 @@
     "overrideReferences": false,
     "precompiledReferences": [],
     "autoReferenced": true,
-    "defineConstraints": [],
+    "defineConstraints": ["ULINK_LOCALIZATION"],
     "versionDefines": [
-        {
-            "name": "com.unity.localization",
-            "expression": "",
-            "define": "ULINK_LOCALIZATION"
-        }
+        { "name": "com.unity.localization", "expression": "", "define": "ULINK_LOCALIZATION" }
     ],
     "noEngineReferences": false
 }

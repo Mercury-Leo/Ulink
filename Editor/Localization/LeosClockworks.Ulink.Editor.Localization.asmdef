@@ -1,8 +1,10 @@
 {
-    "name": "LeosClockworks.Ulink.Editor",
+    "name": "LeosClockworks.Ulink.Editor.Localization",
     "rootNamespace": "",
     "references": [
-        "GUID:ce8cc2aaf4dc37448bde8c0c74953a5e"
+        "GUID:ce8cc2aaf4dc37448bde8c0c74953a5e",
+        "GUID:8702f974eae00ad4ab03c2803ba1774d",
+        "GUID:eec0964c48f6f4e40bc3ec2257ccf8c5"
     ],
     "includePlatforms": [
         "Editor"
@@ -12,7 +14,9 @@
     "overrideReferences": false,
     "precompiledReferences": [],
     "autoReferenced": true,
-    "defineConstraints": [],
+    "defineConstraints": [
+        "ULINK_LOCALIZATION"
+    ],
     "versionDefines": [
         {
             "name": "com.unity.localization",
