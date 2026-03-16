@@ -14,7 +14,7 @@ Ulink lets you attach reusable logic components to UI elements defined in UXML. 
 
 - **Composition over inheritance**: Attach multiple components to a single element, each handling a focused concern.
 - **Inspector-driven configuration**: Add, configure, and remove components through a dedicated property drawer—no code changes required.
-- **Serialized properties**: Mark fields with `[UlinkProperty]` and configure them directly in the Inspector.
+- **Serialized properties**: Mark fields with `[UlinkSerializable]` and configure them directly in the Inspector.
 - **Lifecycle management**: Automatic calls to `Setup`, `OnAttach`, and `OnDetach` keep components properly initialized and torn down.
 - **Editor awareness**: Control whether components run in the Editor, globally or per-component.
 
@@ -25,7 +25,7 @@ Ulink lets you attach reusable logic components to UI elements defined in UXML. 
 - **Component interface** — Implement `IUlinkComponent<T>` (or non-generic `IUlinkComponent`) to define reusable UI logic.
 - **Element marking** — Add `[UlinkElement]` to a `VisualElement` class to enable component injection.
 - **Inspector drawer** — Search, add, configure, and remove components through a dedicated property drawer.
-- **Serialized properties** — Mark fields with `[UlinkProperty]` to expose them for configuration in the Inspector.
+- **Serialized properties** — Mark fields with `[UlinkSerializable]` to expose them for configuration in the Inspector.
 - **Runtime-only components** — Add `[UlinkRuntimeOnly]` to a component class to skip it during editor-time execution.
 - **Manual initialization** — Use `UlinkExtensions.Initialize<T>()` to initialize a component outside the normal Ulink lifecycle.
 
@@ -98,19 +98,19 @@ public partial class ScoreDisplay : VisualElement
 With `[UlinkElement]` applied, a component drawer appears in the UI Builder Inspector for that element. Use it to:
 
 - Search for and add components by type.
-- Configure `[UlinkProperty]` fields directly.
+- Configure `[UlinkSerializable]` fields directly.
 - Remove components when no longer needed.
 
-### 4. Configure Properties with `[UlinkProperty]`
+### 4. Configure Properties with `[UlinkSerializable]`
 
-Mark fields on a component with `[UlinkProperty]` to expose them for configuration in the Inspector:
+Mark fields on a component with `[UlinkSerializable]` to expose them for configuration in the Inspector:
 
 ```csharp
 public class ThresholdComponent : IUlinkComponent<VisualElement>
 {
-    [UlinkProperty] int threshold = 100;
-    [UlinkProperty] string label = "Score";
-    [UlinkProperty] MyEnum mode = MyEnum.Default;
+    [UlinkSerializable] int threshold = 100;
+    [UlinkSerializable] string label = "Score";
+    [UlinkSerializable] MyEnum mode = MyEnum.Default;
 
     public void Setup(VisualElement element) { /* ... */ }
     public void OnAttach() { /* ... */ }
@@ -171,7 +171,7 @@ A complete component that tracks a score and updates a label:
 [UlinkRuntimeOnly]
 public class ScoreComponent : IUlinkComponent<Label>
 {
-    [UlinkProperty] public string prefix = "Score: ";
+    [UlinkSerializable] public string prefix = "Score: ";
 
     Label _label;
 
@@ -203,7 +203,7 @@ Then open the element in the UI Builder, add `ScoreComponent` via the Inspector 
 
 ## UlinkAssetRegistry
 
-`UlinkAssetRegistry` is a `ScriptableObject` that maps asset GUIDs to `UnityEngine.Object` references for runtime resolution of `[UlinkProperty]` fields typed as `UnityEngine.Object` subclasses.
+`UlinkAssetRegistry` is a `ScriptableObject` that maps asset GUIDs to `UnityEngine.Object` references for runtime resolution of `[UlinkSerializable]` fields typed as `UnityEngine.Object` subclasses.
 
 It is **auto-generated and kept in sync** by the Ulink generator at `Assets/Generated/Ulink/Resources/`. You do not need to create or manage it manually.
 

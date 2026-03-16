@@ -173,11 +173,11 @@ namespace Ulink.Editor
                     section.Add(new HelpBox("Runtime only \u2014 not active in editor.", HelpBoxMessageType.Info));
                 }
 
-                // [UlinkProperty] fields
+                // [UlinkSerializable] fields
                 if (resolved != null)
                 {
-                    foreach (var field in UlinkFieldDiscovery.GetUlinkPropertyFields(resolved))
-                        section.Add(UlinkPropertyControlFactory.Create(typeName, field, state));
+                    foreach (var field in UlinkFieldDiscovery.GetUlinkSerializableFields(resolved))
+                        section.Add(UlinkSerializableControlFactory.Create(typeName, field, state));
                 }
 
                 listContainer.Add(section);

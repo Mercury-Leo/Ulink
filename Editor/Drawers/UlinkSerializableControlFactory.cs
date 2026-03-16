@@ -10,13 +10,15 @@ using UnityEngine.UIElements;
 namespace Ulink.Editor
 {
     /// <summary>
-    /// Creates inspector UI controls for individual [UlinkProperty] fields.
+    /// Creates inspector UI controls for individual [UlinkSerializable] fields.
     /// Each control reads its initial value from the drawer state and writes back on change.
     /// Object references are stored as GUIDs; vectors/colors as comma-separated floats.
     /// </summary>
-    internal static class UlinkPropertyControlFactory
+    internal static class UlinkSerializableControlFactory
     {
         /// <param name="aqn">Assembly-qualified name of the component owning this field.</param>
+        /// <param name="field"></param>
+        /// <param name="state"></param>
         public static VisualElement Create(string aqn, FieldInfo field, UlinkDrawerState state)
         {
             var row = new VisualElement

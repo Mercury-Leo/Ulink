@@ -4,10 +4,10 @@ using System;
 namespace Ulink.Runtime
 {
     /// <summary>
-    /// Reads [UlinkProperty] fields on a component instance and populates them from
+    /// Reads [UlinkSerializable] fields on a component instance and populates them from
     /// the data stored in a UlinkComponentsType before the component's Setup is called.
     /// </summary>
-    public static class UlinkPropertyInjector
+    public static class UlinkSerializableInjector
     {
         public static void Inject(object instance, UlinkComponentsType componentsType, string? assemblyQualifiedName)
         {
@@ -18,7 +18,7 @@ namespace Ulink.Runtime
 
             var type = instance.GetType();
 
-            foreach (var field in UlinkFieldDiscovery.GetUlinkPropertyFields(type))
+            foreach (var field in UlinkFieldDiscovery.GetUlinkSerializableFields(type))
             {
                 if (!data.TryGetValue(field.Name, out string? rawValue)) continue;
 
