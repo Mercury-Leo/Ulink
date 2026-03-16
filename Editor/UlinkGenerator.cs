@@ -20,7 +20,7 @@ namespace Ulink.Editor
         private const string GenerateFolder = "Generated/Ulink";
         private const string AssetsPath = "Assets";
         private const string UlinkFileName = "Ulink.g.cs";
-        private const int TemplateVersion = 1;
+        private const int TemplateVersion = 2;
         private const string RegistryResourcesFolder = "Assets/Generated/Ulink/Resources";
         internal const string RegistryAssetPath = "Assets/Generated/Ulink/Resources/UlinkAssetRegistry.asset";
 
@@ -475,6 +475,9 @@ namespace Ulink.Editor
             writer.CloseBlock();
             writer.Directive("#endif");
 
+            writer.Line();
+            GenerateComponentLookupMethods(writer);
+
             writer.CloseBlock(); // class
 
             if (hasNamespace) writer.CloseBlock(); // namespace
@@ -482,11 +485,53 @@ namespace Ulink.Editor
             return writer.ToString();
         }
 
+        private static void GenerateComponentLookupMethods(CodeWriter writer)
+        {
+            // TryGetComponent<TComponent> — first match, no allocation
+            writer.OpenBlock("public bool TryGetComponent<TComponent>([NotNullWhen(true)] out TComponent? component) where TComponent : class");
+            writer.OpenBlock("foreach (var c in _typedComponents)");
+            writer.Line("if (c is TComponent match) { component = match; return true; }");
+            writer.CloseBlock();
+            writer.OpenBlock("foreach (var c in _baseComponents)");
+            writer.Line("if (c is TComponent match) { component = match; return true; }");
+            writer.CloseBlock();
+            writer.Line("component = null;");
+            writer.Line("return false;");
+            writer.CloseBlock();
+            writer.Line();
+
+            // GetComponent<TComponent> — returns first match or null
+            writer.OpenBlock("public TComponent? GetComponent<TComponent>() where TComponent : class");
+            writer.Line("TryGetComponent(out TComponent? component);");
+            writer.Line("return component;");
+            writer.CloseBlock();
+            writer.Line();
+
+            // GetComponents<TComponent>() — returns all matches as array
+            writer.OpenBlock("public TComponent[] GetComponents<TComponent>() where TComponent : class");
+            writer.Line("var results = new List<TComponent>();");
+            writer.Line("GetComponents(results);");
+            writer.Line("return results.ToArray();");
+            writer.CloseBlock();
+            writer.Line();
+
+            // GetComponents<TComponent>(List<TComponent>) — fill-in-place, no allocation
+            writer.OpenBlock("public void GetComponents<TComponent>(List<TComponent> results) where TComponent : class");
+            writer.OpenBlock("foreach (var c in _typedComponents)");
+            writer.Line("if (c is TComponent match) results.Add(match);");
+            writer.CloseBlock();
+            writer.OpenBlock("foreach (var c in _baseComponents)");
+            writer.Line("if (c is TComponent match) results.Add(match);");
+            writer.CloseBlock();
+            writer.CloseBlock();
+        }
+
         private static string GenerateUsing()
         {
             return @"
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using Ulink.Runtime;
 using UnityEngine;
 using UnityEngine.UIElements;";
