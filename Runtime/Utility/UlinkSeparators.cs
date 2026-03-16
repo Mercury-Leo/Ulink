@@ -1,6 +1,6 @@
 namespace Ulink.Runtime
 {
-    internal static class UlinkSeparators
+    public static class UlinkSeparators
     {
         // Unicode Private Use Area characters (U+E000–U+F8FF).
         // Valid XML 1.0, never appear in C# AQNs, and won't be typed by users.
