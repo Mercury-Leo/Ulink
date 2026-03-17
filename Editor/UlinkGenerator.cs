@@ -20,7 +20,7 @@ namespace Ulink.Editor
         private const string GenerateFolder = "Generated/Ulink";
         private const string AssetsPath = "Assets";
         private const string UlinkFileName = "Ulink.g.cs";
-        private const int TemplateVersion = 2;
+        private const int TemplateVersion = 3;
         private const string RegistryResourcesFolder = "Assets/Generated/Ulink/Resources";
         internal const string RegistryAssetPath = "Assets/Generated/Ulink/Resources/UlinkAssetRegistry.asset";
 
@@ -362,7 +362,7 @@ namespace Ulink.Editor
             bool hasNamespace = !string.IsNullOrEmpty(namespaceName);
             if (hasNamespace) writer.OpenBlock($"namespace {namespaceName}");
 
-            writer.OpenBlock($"public partial class {className}");
+            writer.OpenBlock($"public partial class {className} : {nameof(IUlinkElement)}");
 
             // Fields
             writer.Line($"private {nameof(UlinkComponentsType)} _componentsType;");

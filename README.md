@@ -28,6 +28,17 @@ Ulink lets you attach reusable logic components to UI elements defined in UXML. 
 - **Serialized properties** — Mark fields with `[UlinkSerializable]` to expose them for configuration in the Inspector.
 - **Runtime-only components** — Add `[UlinkRuntimeOnly]` to a component class to skip it during editor-time execution.
 - **Manual initialization** — Use `UlinkExtensions.Initialize<T>()` to initialize a component outside the normal Ulink lifecycle.
+- **`IUlinkElement` interface** — Every `[UlinkElement]` class implements `IUlinkElement`, which exposes
+  `TryGetComponent<T>`, `GetComponent<T>`, and `GetComponents<T>` directly on the interface.
+  Use it to query components from any code holding a `VisualElement` reference without knowing the concrete type:
+  ```csharp
+  if (element is IUlinkElement uel && uel.TryGetComponent<MyComp>(out var c)) { ... }
+
+  // LINQ traversal over a panel:
+  panel.Query<VisualElement>().ToList().OfType<IUlinkElement>()
+      .Select(e => e.GetComponent<MyComp>())
+      .Where(c => c != null)
+  ```
 
 ---
 
