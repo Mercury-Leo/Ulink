@@ -4,6 +4,15 @@ All notable changes to Ulink will be documented here.
 
 ---
 
+## [0.8.7]
+
+### Changed
+- `IUlinkElement` now exposes the four component query methods as interface members:
+  `TryGetComponent<T>`, `GetComponent<T>`, `GetComponents<T>()`, and `GetComponents<T>(List<T>)`.
+  Callers holding an `IUlinkElement` reference can query components without casting to the concrete type.
+
+---
+
 ## [0.8.5]
 
 ### Added
