@@ -9,6 +9,7 @@ using System.Xml.Linq;
 using Ulink.Runtime;
 using UnityEditor;
 using UnityEditor.Compilation;
+using UnityEditorInternal;
 using UnityEngine;
 using UnityEngine.UIElements;
 
@@ -25,6 +26,16 @@ namespace Ulink.Editor
         internal const string RegistryAssetPath = "Assets/Generated/Ulink/Resources/UlinkAssetRegistry.asset";
 
         private static readonly Dictionary<string, string> AssemblyRootByName = new();
+
+        // Unity's predefined assemblies, which hold loose scripts under Assets/ that have no asmdef.
+        // For these, an "Assets" root is correct — they are not stripped by defineConstraints.
+        private static readonly HashSet<string> PredefinedAssemblies = new()
+        {
+            "Assembly-CSharp",
+            "Assembly-CSharp-Editor",
+            "Assembly-CSharp-firstpass",
+            "Assembly-CSharp-Editor-firstpass",
+        };
 
         static UlinkGenerator()
         {
@@ -268,7 +279,32 @@ namespace Ulink.Editor
             foreach (var type in types)
             {
                 string assemblyName = type.Assembly.GetName().Name!;
-                string? root = AssemblyRootByName.GetValueOrDefault(assemblyName, AssetsPath);
+
+                string root;
+                if (AssemblyRootByName.TryGetValue(assemblyName, out var resolved))
+                {
+                    // Resolved to an asmdef folder. Works even when the owning assembly is excluded
+                    // from the current compilation (e.g. a defineConstraints strip), so a stripped
+                    // assembly's fragment lands inside that assembly and is stripped along with it.
+                    root = resolved;
+                }
+                else if (PredefinedAssemblies.Contains(assemblyName))
+                {
+                    // Loose scripts under Assets/ with no asmdef genuinely belong to a predefined assembly.
+                    root = AssetsPath;
+                }
+                else
+                {
+                    // Unknown assembly: do NOT fall back to Assets/, which would write the fragment into
+                    // Assembly-CSharp and break compilation (CS0311) once it no longer merges with the
+                    // element's real VisualElement half. Surface the misconfiguration instead.
+                    Debug.LogWarning(
+                        $"[Ulink] Skipping '{type.FullName}': could not resolve a project folder for its " +
+                        $"assembly '{assemblyName}'. Ensure that assembly has an .asmdef in the project. " +
+                        "No fragment was written to avoid poisoning Assembly-CSharp.");
+                    continue;
+                }
+
                 if (!dict.TryGetValue(root, out var list))
                 {
                     list = new List<Type>();
@@ -300,34 +336,63 @@ namespace Ulink.Editor
 
         private static void BuildAssemblyRootCache()
         {
-            if (AssemblyRootByName.Count > 0)
-            {
-                return;
-            }
+            // Rebuild every generation. The cache is static (so it survives a single Generate but not a
+            // domain reload), yet asmdefs can be added, moved or renamed within one domain without a
+            // reload, so a stale cache could misplace fragments. A FindAssets scan is cheap.
+            AssemblyRootByName.Clear();
 
-            foreach (var assembly in CompilationPipeline.GetAssemblies())
+            // Resolve roots from *all* asmdefs in the project rather than from CompilationPipeline's
+            // current assembly set. The latter omits assemblies excluded from the current build (e.g.
+            // via defineConstraints on a dedicated-server build), which previously caused those types
+            // to fall through to "Assets" and poison Assembly-CSharp. AssetDatabase sees every asmdef
+            // regardless of platform/define exclusion, so resolution is now compilation-independent.
+            foreach (string guid in AssetDatabase.FindAssets("t:asmdef"))
             {
-                string? name = assembly.name;
-                string root = AssetsPath;
-
-                try
+                string asmdefPath = AssetDatabase.GUIDToAssetPath(guid);
+                if (string.IsNullOrEmpty(asmdefPath))
                 {
-                    string? asmdefPath = CompilationPipeline.GetAssemblyDefinitionFilePathFromAssemblyName(name);
-                    if (!string.IsNullOrEmpty(asmdefPath))
-                    {
-                        root = Path.GetDirectoryName(asmdefPath)!.Replace('\\', '/');
-                    }
-                }
-                catch
-                {
-                    // ignore
+                    continue;
                 }
 
-                AssemblyRootByName[name] = root;
-            }
+                string? assemblyName = ReadAssemblyName(asmdefPath);
+                if (string.IsNullOrEmpty(assemblyName))
+                {
+                    continue;
+                }
 
-            AssemblyRootByName.TryAdd("Assembly-CSharp", AssetsPath);
-            AssemblyRootByName.TryAdd("Assembly-CSharp-Editor", AssetsPath);
+                string? dir = Path.GetDirectoryName(asmdefPath);
+                if (string.IsNullOrEmpty(dir))
+                {
+                    continue;
+                }
+
+                AssemblyRootByName[assemblyName!] = dir!.Replace('\\', '/');
+            }
+        }
+
+        private static string? ReadAssemblyName(string asmdefPath)
+        {
+            try
+            {
+                var asset = AssetDatabase.LoadAssetAtPath<AssemblyDefinitionAsset>(asmdefPath);
+                string json = asset != null ? asset.text : string.Empty;
+                if (string.IsNullOrEmpty(json))
+                {
+                    return null;
+                }
+
+                return JsonUtility.FromJson<AsmdefName>(json)?.name;
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        [Serializable]
+        private sealed class AsmdefName
+        {
+            public string name = string.Empty;
         }
 
         private static string BuildFileHeader()
