@@ -233,6 +233,65 @@ By default, components run both at runtime and in the Editor.
 
 ---
 
+## Performance & Benchmarks
+
+Ulink's composition model has a cost. Where a vanilla `VisualElement` subclass **is** its own logic
+(inheritance), a Ulink element **instantiates, injects, and sets up each attached component** when it
+is built. This is a deliberate tradeoff: **you pay more at construction and first-time boot in
+exchange for composition, Inspector-driven configuration, and cheap runtime access.**
+
+The rule of thumb is **build cost is higher, access cost is not**. If you construct UI once and
+interact with it many times — the common case — the overhead amortizes to near zero. If you rebuild
+very large panels frequently, the construction cost is real; prefer pooling and reuse there.
+
+### What was measured
+
+Each scenario compares a Ulink element (logic in components) against a vanilla element (logic via
+inheritance), across panels of 1 / 10 / 100 / 1000 elements. Ratios below are Ulink relative to
+vanilla; absolute timings are hardware-dependent, so the ratio is the portable signal.
+
+| Scenario | What it measures | Ulink vs vanilla |
+|---|---|---|
+| **Access** | Retrieve one component and invoke it (`GetComponent` / `TryGetComponent`) | ≈ a cached reference; **flat** as the panel grows, and far cheaper than a fresh `Q<>()` |
+| **Bulk query** | Process every matching element in a panel | ~30–60% slower; the no-alloc `GetComponents(List<T>)` path matches vanilla's allocations |
+| **Construction** | Clone a UXML template + instantiate/inject/Setup | ~2–3× for one component, ~5× for three — **this is where the tradeoff lives** |
+| **Lifecycle** | Attach/detach on a live panel | ~1.25–1.8× (fans `OnAttach`/`OnDetach` across each element's component list) |
+| **Boot** | First panel bring-up (cold) | a **one-time** init (asset registry load + type resolution + JIT), then steady state |
+
+Access stays close to native because a component lookup is a short linear scan over an element's own
+component list — not a panel-wide tree query — so it does not degrade as the panel grows.
+
+### Why boot/construction is slower (and why that's fine)
+
+Building a Ulink element does real work per component that vanilla never does: create the component,
+inject its `[UlinkSerializable]` fields, call `Setup`, and wire lifecycle callbacks. Three components
+therefore cost roughly three times the setup of one. The first Ulink panel of a session also pays a
+small **one-time** cost to warm the `UlinkAssetRegistry`, resolve component types, and JIT the build
+path.
+
+To keep that cost as low as possible, the hot path is **code-generated, not reflective**:
+
+- Components are created through generated `() => new Component()` factories — no `Activator.CreateInstance`.
+- `[UlinkSerializable]` fields are assigned by generated typed setters — no reflection `SetValue`, no boxing of primitives.
+- Type resolution is cached process-wide, and per-element structures (component lists, lifecycle
+  delegates) are allocated lazily or cached, so a populated panel allocates far less than a naive
+  composition layer would.
+
+All of this is AOT/IL2CPP-safe (no `Reflection.Emit` or `Expression.Compile`).
+
+### Tradeoff summary
+
+- ✅ **Cheap steady-state access** — `GetComponent` runs at roughly cached-field speed and does not degrade with panel size.
+- ✅ **Allocation-lean, reflection-free hot path** — creation and injection are generated, so the runtime cost is low and AOT-safe.
+- ⚠️ **Higher construction cost** — each component is instantiated, injected, and set up when the element is built.
+- ⚠️ **A one-time boot cost** — the first Ulink panel of a session warms the registry, type resolution, and JIT.
+
+**Choose Ulink** when your UI is composed, configured in the Builder, and built-then-used. **Prefer
+plain inheritance** when you churn very large panels on the hot path and every microsecond of
+construction counts.
+
+---
+
 ## Known Issues
 
 1. Changing a component's path will result in a lose of serialization. Looking into ways to fix this.
