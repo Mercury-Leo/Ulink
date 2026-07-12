@@ -21,6 +21,22 @@ namespace Ulink.Runtime
         [NonSerialized] private Type?[]? _typesCache;
         [NonSerialized] private string? _typesCacheKey;
 
+        // Process-wide resolution caches. Every cloned element deserializes a FRESH struct, so the
+        // per-instance cache above is always cold on first access — without these, a panel of N
+        // elements pays N × (string.Split + Type.GetType per AQN). Type resolution is deterministic
+        // and immutable, so we resolve each AQN (and each full types-section) exactly once per
+        // process and hand back the shared, read-only array to every element that references it.
+        private static readonly Dictionary<string, Type?> TypeByAqn = new();
+        private static readonly Dictionary<string, Type?[]> TypesBySection = new();
+
+        // Single-slot memo for GetDataFor. During element construction the generated setter injects
+        // every component of one element back-to-back with the same data section, so a K-component
+        // element used to re-parse that section K times. Caching just the most-recent parse collapses
+        // that to one, with O(1) retention (the slot is overwritten by the next element). ThreadStatic
+        // keeps it correct if parsing ever runs off the main thread.
+        [ThreadStatic] private static string? _lastDataKey;
+        [ThreadStatic] private static Dictionary<string, Dictionary<string, string>>? _lastDataParsed;
+
         // ── Public API ────────────────────────────────────────────────────────
 
         public string[] TypeNames
@@ -41,33 +57,50 @@ namespace Ulink.Runtime
                     return _typesCache;
 
                 _typesCacheKey = key;
-                _typesCache = string.IsNullOrEmpty(key)
-                    ? Array.Empty<Type?>()
-                    : key.Split(UlinkSeparators.TypeSeparator).Select(Type.GetType).ToArray();
+                _typesCache = ResolveTypes(key);
                 return _typesCache;
             }
         }
 
+        private static Type?[] ResolveTypes(string key)
+        {
+            if (string.IsNullOrEmpty(key)) return Array.Empty<Type?>();
+            if (TypesBySection.TryGetValue(key, out var cached)) return cached;
+
+            string[] aqns = key.Split(UlinkSeparators.TypeSeparator);
+            var types = new Type?[aqns.Length];
+            for (int i = 0; i < aqns.Length; i++)
+                types[i] = ResolveType(aqns[i]);
+
+            TypesBySection[key] = types;
+            return types;
+        }
+
+        private static Type? ResolveType(string aqn)
+        {
+            if (TypeByAqn.TryGetValue(aqn, out var type)) return type;
+            type = Type.GetType(aqn);
+            TypeByAqn[aqn] = type;
+            return type;
+        }
+
         public static UlinkComponentsType Empty { get; } = new() { TypeNamesRaw = string.Empty };
+
+        private static readonly Dictionary<string, string> EmptyData = new();
 
         /// <summary>Returns field-name → value pairs stored for one component by its AQN.</summary>
         public Dictionary<string, string> GetDataFor(string assemblyQualifiedName)
         {
-            var result = new Dictionary<string, string>();
             string data = DataSection(TypeNamesRaw);
-            if (string.IsNullOrEmpty(data)) return result;
+            if (string.IsNullOrEmpty(data)) return EmptyData;
 
-            foreach (string? entry in data.Split(UlinkSeparators.ComponentSeparator))
+            if (data != _lastDataKey)
             {
-                int separator = entry.IndexOf(UlinkSeparators.DataSeparator);
-                if (separator < 0) continue;
-                if (entry[..separator] != assemblyQualifiedName) continue;
-
-                ParseFieldPairs(entry[(separator + 1)..], result);
-                break;
+                _lastDataKey = data;
+                _lastDataParsed = ParseAllData(TypeNamesRaw);
             }
 
-            return result;
+            return _lastDataParsed!.TryGetValue(assemblyQualifiedName, out var fields) ? fields : EmptyData;
         }
 
         // ── Helpers used by the editor drawer ────────────────────────────────
