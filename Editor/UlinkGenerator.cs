@@ -21,7 +21,7 @@ namespace Ulink.Editor
         private const string GenerateFolder = "Generated/Ulink";
         private const string AssetsPath = "Assets";
         private const string UlinkFileName = "Ulink.g.cs";
-        private const int TemplateVersion = 5;
+        private const int TemplateVersion = 6;
         private const string RegistryResourcesFolder = "Assets/Generated/Ulink/Resources";
         internal const string RegistryAssetPath = "Assets/Generated/Ulink/Resources/UlinkAssetRegistry.asset";
 
@@ -599,8 +599,20 @@ namespace Ulink.Editor
             writer.Line($"private {nameof(UlinkComponentsType)} _componentsType;");
             writer.Line(
                 $"private readonly List<{nameof(IUlinkComponent<VisualElement>)}<{className}>> _typedComponents = new();");
+            writer.Line("// Lazily allocated — base-typed (IUlinkComponent<VisualElement>) components are uncommon,");
+            writer.Line("// so most elements never allocate this list.");
             writer.Line(
-                $"private readonly List<{nameof(IUlinkComponent<VisualElement>)}<{nameof(VisualElement)}>> _baseComponents = new();");
+                $"private List<{nameof(IUlinkComponent<VisualElement>)}<{nameof(VisualElement)}>>? _baseComponents;");
+            writer.Line();
+            // Delegates cached once per type, not per element: Unity's compiler does not cache static
+            // method-group conversions, so a plain RegisterCallback(Method, this) would allocate a
+            // delegate on every element. Holding them in static fields makes registration allocation-free.
+            writer.Directive("#if !UNITY_EDITOR || ULINK_EDITOR");
+            writer.Line(
+                $"private static readonly EventCallback<{nameof(AttachToPanelEvent)}, {className}> s_onComponentsPanelAttach = OnComponentsPanelAttach;");
+            writer.Line(
+                $"private static readonly EventCallback<{nameof(DetachFromPanelEvent)}, {className}> s_onComponentsPanelDetach = OnComponentsPanelDetach;");
+            writer.Directive("#endif");
             writer.Line();
 
             // Property
@@ -613,18 +625,18 @@ namespace Ulink.Editor
             // --- Reset block ---
             writer.Line("// Reset components");
             writer.Directive("#if !UNITY_EDITOR || ULINK_EDITOR");
-            writer.OpenBlock("if (_typedComponents.Count > 0 || _baseComponents.Count > 0)");
+            writer.OpenBlock("if (_typedComponents.Count > 0 || (_baseComponents != null && _baseComponents.Count > 0))");
             writer.Directive("#if UNITY_EDITOR");
             writer.Line(
                 $"if (!(_typedComponents.Exists(component => !component.GetType().IsDefined(typeof({nameof(UlinkRuntimeOnlyAttribute)}), false)) ||");
             writer.Line(
-                $"    _baseComponents.Exists(component => !component.GetType().IsDefined(typeof({nameof(UlinkRuntimeOnlyAttribute)}), false))))");
+                $"    (_baseComponents != null && _baseComponents.Exists(component => !component.GetType().IsDefined(typeof({nameof(UlinkRuntimeOnlyAttribute)}), false)))))");
             writer.OpenBlock();
             writer.Directive("#endif");
-            writer.Line($"UnregisterCallback<{nameof(AttachToPanelEvent)}>(OnComponentsPanelAttach);");
-            writer.Line($"UnregisterCallback<{nameof(DetachFromPanelEvent)}>(OnComponentsPanelDetach);");
+            writer.Line("UnregisterCallback(s_onComponentsPanelAttach);");
+            writer.Line("UnregisterCallback(s_onComponentsPanelDetach);");
             writer.Line("foreach (var component in _typedComponents) component.OnDetach();");
-            writer.Line("foreach (var component in _baseComponents) component.OnDetach();");
+            writer.Line("if (_baseComponents != null) foreach (var component in _baseComponents) component.OnDetach();");
             writer.Directive("#if UNITY_EDITOR");
             writer.CloseBlock(); // anonymous block
             writer.Directive("#endif");
@@ -634,7 +646,7 @@ namespace Ulink.Editor
 
             // --- Clear + early return ---
             writer.Line("_typedComponents.Clear();");
-            writer.Line("_baseComponents.Clear();");
+            writer.Line("_baseComponents?.Clear();");
             writer.Line();
             writer.OpenBlock($"if (string.IsNullOrEmpty(value.{nameof(UlinkComponentsType.TypeNamesRaw)}))");
             writer.Line($"_componentsType = {nameof(UlinkComponentsType)}.{nameof(UlinkComponentsType.Empty)};");
@@ -661,7 +673,7 @@ namespace Ulink.Editor
             writer.Line($"if (type.IsDefined(typeof({nameof(UlinkRuntimeOnlyAttribute)}), false)) continue;");
             writer.Directive("#endif");
             writer.Line("if (instanceType != null) _typedComponents.Add(instanceType);");
-            writer.Line("else _baseComponents.Add(baseComp!);");
+            writer.Line("else (_baseComponents ??= new()).Add(baseComp!);");
             writer.Line();
             writer.Line(
                 $"{nameof(UlinkInjectorRegistry)}.{nameof(UlinkInjectorRegistry.Inject)}(instance!, type, value);");
@@ -672,18 +684,18 @@ namespace Ulink.Editor
             writer.Line();
             writer.OpenBlock("if (panel != null)");
             writer.Line("foreach (var component in _typedComponents) component.OnAttach();");
-            writer.Line("foreach (var component in _baseComponents) component.OnAttach();");
+            writer.Line("if (_baseComponents != null) foreach (var component in _baseComponents) component.OnAttach();");
             writer.CloseBlock();
             writer.Line();
-            writer.OpenBlock("if (_typedComponents.Count > 0 || _baseComponents.Count > 0)");
-            writer.Line($"RegisterCallback<{nameof(AttachToPanelEvent)}>(OnComponentsPanelAttach);");
-            writer.Line($"RegisterCallback<{nameof(DetachFromPanelEvent)}>(OnComponentsPanelDetach);");
+            writer.OpenBlock("if (_typedComponents.Count > 0 || (_baseComponents != null && _baseComponents.Count > 0))");
+            writer.Line("RegisterCallback(s_onComponentsPanelAttach, this);");
+            writer.Line("RegisterCallback(s_onComponentsPanelDetach, this);");
             writer.CloseBlock();
             writer.Directive("#endif");
             writer.CloseBlock(); // try
             writer.OpenBlock("catch (Exception e)");
             writer.Line("_typedComponents.Clear();");
-            writer.Line("_baseComponents.Clear();");
+            writer.Line("_baseComponents?.Clear();");
             writer.Line($"_componentsType = {nameof(UlinkComponentsType)}.{nameof(UlinkComponentsType.Empty)};");
             writer.Line($"Debug.LogWarning($\"[Ulink] Failed to initialize Ulink Components: {{e}}\");");
             writer.CloseBlock(); // catch
@@ -693,17 +705,19 @@ namespace Ulink.Editor
             writer.Line();
 
             // --- Callback methods ---
+            // Static callbacks taking `self` via the userArgs overload: the compiler caches the static
+            // method-group delegate, so callback registration allocates no per-element delegate.
             writer.Directive("#if !UNITY_EDITOR || ULINK_EDITOR");
-            writer.OpenBlock($"private void OnComponentsPanelAttach({nameof(AttachToPanelEvent)} panelEvent)");
-            writer.Line("if (panelEvent.target != this) return;");
-            writer.Line("foreach (var component in _typedComponents) component.OnAttach();");
-            writer.Line("foreach (var component in _baseComponents) component.OnAttach();");
+            writer.OpenBlock($"private static void OnComponentsPanelAttach({nameof(AttachToPanelEvent)} panelEvent, {className} self)");
+            writer.Line("if (panelEvent.target != self) return;");
+            writer.Line("foreach (var component in self._typedComponents) component.OnAttach();");
+            writer.Line("if (self._baseComponents != null) foreach (var component in self._baseComponents) component.OnAttach();");
             writer.CloseBlock();
             writer.Line();
-            writer.OpenBlock($"private void OnComponentsPanelDetach({nameof(DetachFromPanelEvent)} panelEvent)");
-            writer.Line("if (panelEvent.target != this) return;");
-            writer.Line("foreach (var component in _typedComponents) component.OnDetach();");
-            writer.Line("foreach (var component in _baseComponents) component.OnDetach();");
+            writer.OpenBlock($"private static void OnComponentsPanelDetach({nameof(DetachFromPanelEvent)} panelEvent, {className} self)");
+            writer.Line("if (panelEvent.target != self) return;");
+            writer.Line("foreach (var component in self._typedComponents) component.OnDetach();");
+            writer.Line("if (self._baseComponents != null) foreach (var component in self._baseComponents) component.OnDetach();");
             writer.CloseBlock();
             writer.Directive("#endif");
 
@@ -724,7 +738,7 @@ namespace Ulink.Editor
             writer.OpenBlock("foreach (var c in _typedComponents)");
             writer.Line("if (c is TComponent match) { component = match; return true; }");
             writer.CloseBlock();
-            writer.OpenBlock("foreach (var c in _baseComponents)");
+            writer.OpenBlock("if (_baseComponents != null) foreach (var c in _baseComponents)");
             writer.Line("if (c is TComponent match) { component = match; return true; }");
             writer.CloseBlock();
             writer.Line("component = null;");
@@ -752,7 +766,7 @@ namespace Ulink.Editor
             writer.OpenBlock("foreach (var c in _typedComponents)");
             writer.Line("if (c is TComponent match) results.Add(match);");
             writer.CloseBlock();
-            writer.OpenBlock("foreach (var c in _baseComponents)");
+            writer.OpenBlock("if (_baseComponents != null) foreach (var c in _baseComponents)");
             writer.Line("if (c is TComponent match) results.Add(match);");
             writer.CloseBlock();
             writer.CloseBlock();
