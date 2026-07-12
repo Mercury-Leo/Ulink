@@ -21,7 +21,7 @@ namespace Ulink.Editor
         private const string GenerateFolder = "Generated/Ulink";
         private const string AssetsPath = "Assets";
         private const string UlinkFileName = "Ulink.g.cs";
-        private const int TemplateVersion = 4;
+        private const int TemplateVersion = 5;
         private const string RegistryResourcesFolder = "Assets/Generated/Ulink/Resources";
         internal const string RegistryAssetPath = "Assets/Generated/Ulink/Resources/UlinkAssetRegistry.asset";
 
@@ -318,9 +318,15 @@ namespace Ulink.Editor
 
         private static string BuildComponentFactoryRegistrar(List<Type> types)
         {
+            // A type gets a generated typed injector only if every [UlinkSerializable] field is
+            // reachable from generated code in this assembly (public / internal / protected-internal).
+            // Others keep the reflection injector via UlinkInjectorRegistry's fallback.
+            var injectable = types.Where(AllSerializableFieldsAccessible).ToList();
+
             var writer = new CodeWriter();
 
-            writer.Line("// Allocation-free component factories — replace Activator.CreateInstance on the hot path.");
+            writer.Line("// Allocation-free component factories + typed injectors — replace Activator.CreateInstance");
+            writer.Line("// and reflection field injection on the hot path.");
             writer.OpenBlock("internal static class UlinkGeneratedComponentFactories");
 
             writer.Directive("#if UNITY_EDITOR");
@@ -331,17 +337,107 @@ namespace Ulink.Editor
 
             foreach (var type in types)
             {
-                string fqn = "global::" + type.FullName!.Replace('+', '.');
+                string fqn = Fqn(type);
                 writer.Line(
                     $"{nameof(UlinkComponentRegistry)}.{nameof(UlinkComponentRegistry.Register)}(typeof({fqn}), () => new {fqn}());");
             }
 
+            foreach (var type in injectable)
+                writer.Line(
+                    $"{nameof(UlinkInjectorRegistry)}.{nameof(UlinkInjectorRegistry.Register)}(typeof({Fqn(type)}), {InjectorMethodName(type)});");
+
             writer.CloseBlock(); // method
+
+            foreach (var type in injectable)
+            {
+                writer.Line();
+                AppendTypedInjector(writer, type);
+            }
+
             writer.CloseBlock(); // class
             writer.Line();
 
             return writer.ToString();
         }
+
+        // Emits: static void Inject_X(object boxed, UlinkComponentsType data) { var c = (X)boxed; ... }
+        private static void AppendTypedInjector(CodeWriter writer, Type type)
+        {
+            string fqn = Fqn(type);
+            writer.OpenBlock(
+                $"private static void {InjectorMethodName(type)}(object boxed, {nameof(UlinkComponentsType)} data)");
+            writer.Line($"var c = ({fqn})boxed;");
+            writer.Line($"var d = data.{nameof(UlinkComponentsType.GetDataFor)}(typeof({fqn}).AssemblyQualifiedName);");
+            writer.Line("if (d.Count == 0) return;");
+
+            foreach (var field in UlinkFieldDiscovery.GetUlinkSerializableFields(type))
+            {
+                writer.OpenBlock($"if (d.TryGetValue(\"{field.Name}\", out var raw_{field.Name}))");
+                AppendFieldAssignment(writer, field);
+                writer.CloseBlock();
+            }
+
+            writer.CloseBlock();
+        }
+
+        // Direct, non-boxing assignment for the common types; anything else defers to
+        // UlinkValueConverter (the single source of truth for custom/registered conversions).
+        private static void AppendFieldAssignment(CodeWriter writer, FieldInfo field)
+        {
+            Type ft = field.FieldType;
+            string target = "c." + field.Name;
+            string raw = "raw_" + field.Name;
+            string v = "v_" + field.Name;
+            const string ci = "System.Globalization.CultureInfo.InvariantCulture";
+            const string floatStyle = "System.Globalization.NumberStyles.Float";
+
+            if (ft == typeof(string))
+                writer.Line($"{target} = {raw};");
+            else if (ft == typeof(int))
+                writer.Line($"if (int.TryParse({raw}, out var {v})) {target} = {v};");
+            else if (ft == typeof(long))
+                writer.Line($"if (long.TryParse({raw}, out var {v})) {target} = {v};");
+            else if (ft == typeof(bool))
+                writer.Line($"if (bool.TryParse({raw}, out var {v})) {target} = {v};");
+            else if (ft == typeof(float))
+                writer.Line($"if (float.TryParse({raw}, {floatStyle}, {ci}, out var {v})) {target} = {v};");
+            else if (ft == typeof(double))
+                writer.Line($"if (double.TryParse({raw}, {floatStyle}, {ci}, out var {v})) {target} = {v};");
+            else if (ft == typeof(Vector2))
+                writer.Line($"{target} = global::Ulink.Runtime.UlinkParsing.ParseVector2({raw});");
+            else if (ft == typeof(Vector3))
+                writer.Line($"{target} = global::Ulink.Runtime.UlinkParsing.ParseVector3({raw});");
+            else if (ft == typeof(Vector4))
+                writer.Line($"{target} = global::Ulink.Runtime.UlinkParsing.ParseVector4({raw});");
+            else if (ft == typeof(Color))
+                writer.Line($"{target} = global::Ulink.Runtime.UlinkParsing.ParseColor({raw}, global::UnityEngine.Color.white);");
+            else if (ft.IsEnum)
+                writer.Line($"if (System.Enum.TryParse<{Fqn(ft)}>({raw}, out var {v})) {target} = {v};");
+            else
+            {
+                // Fallback: UnityEngine.Object, LocalizedString, and any runtime-registered converter.
+                writer.Line($"var conv_{field.Name} = global::Ulink.Runtime.{nameof(UlinkValueConverter)}.{nameof(UlinkValueConverter.Convert)}({raw}, typeof({Fqn(ft)}));");
+                writer.Line($"if (conv_{field.Name} != null) {target} = ({Fqn(ft)})conv_{field.Name};");
+            }
+        }
+
+        private static bool AllSerializableFieldsAccessible(Type type)
+        {
+            foreach (var field in UlinkFieldDiscovery.GetUlinkSerializableFields(type))
+            {
+                // public, internal (Assembly), or protected-internal (FamilyOrAssembly) are reachable
+                // from the generated registrar in the same assembly; private/protected are not.
+                if (!(field.IsPublic || field.IsAssembly || field.IsFamilyOrAssembly))
+                    return false;
+            }
+
+            return true;
+        }
+
+        private static string Fqn(Type type) => "global::" + type.FullName!.Replace('+', '.');
+
+        private static string InjectorMethodName(Type type) =>
+            "Inject_" + type.FullName!.Replace('.', '_').Replace('+', '_').Replace('`', '_');
 
         private static Dictionary<string, List<Type>> GroupByAssemblyRoot(List<Type> types)
         {
@@ -568,7 +664,7 @@ namespace Ulink.Editor
             writer.Line("else _baseComponents.Add(baseComp!);");
             writer.Line();
             writer.Line(
-                $"{nameof(UlinkSerializableInjector)}.{nameof(UlinkSerializableInjector.Inject)}(instance!, value, type.AssemblyQualifiedName);");
+                $"{nameof(UlinkInjectorRegistry)}.{nameof(UlinkInjectorRegistry.Inject)}(instance!, type, value);");
             writer.Line();
             writer.Line("instanceType?.Setup(this);");
             writer.Line("baseComp?.Setup(this);");
