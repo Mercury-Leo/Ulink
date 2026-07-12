@@ -21,7 +21,7 @@ namespace Ulink.Editor
         private const string GenerateFolder = "Generated/Ulink";
         private const string AssetsPath = "Assets";
         private const string UlinkFileName = "Ulink.g.cs";
-        private const int TemplateVersion = 3;
+        private const int TemplateVersion = 4;
         private const string RegistryResourcesFolder = "Assets/Generated/Ulink/Resources";
         internal const string RegistryAssetPath = "Assets/Generated/Ulink/Resources/UlinkAssetRegistry.asset";
 
@@ -61,6 +61,8 @@ namespace Ulink.Editor
             var outputByRoot = new Dictionary<string, StringBuilder>();
 
             AppendGeneratedBlocksFor<UlinkElementAttribute>(uxmlElementTypes, outputByRoot, BuildComponentsFileContent);
+
+            AppendComponentFactories(outputByRoot);
 
             var anyChanged = false;
 
@@ -273,6 +275,74 @@ namespace Ulink.Editor
             }
         }
 
+        // Emits, per assembly root, a factory registrar that maps each concrete component type to a
+        // `() => new Concrete()` delegate. This replaces Activator.CreateInstance on the construction
+        // hot path with a dictionary lookup + direct allocation, and is AOT-safe (no reflection emit).
+        // Registration runs at startup in both edit mode ([InitializeOnLoadMethod]) and play mode
+        // ([RuntimeInitializeOnLoadMethod]); anything not registered still works via the Activator
+        // fallback in UlinkComponentRegistry.Create.
+        private static void AppendComponentFactories(Dictionary<string, StringBuilder> outputByRoot)
+        {
+            var componentTypes = TypeCache.GetTypesDerivedFrom(typeof(IUlinkComponent<>))
+                .Where(type =>
+                    type.IsClass &&
+                    !type.IsAbstract &&
+                    !type.IsGenericTypeDefinition &&
+                    // Only types we can `new` directly; others fall back to Activator at runtime.
+                    type.GetConstructor(Type.EmptyTypes) != null)
+                .GroupBy(type => type.FullName)
+                .Select(group => group.First())
+                .ToList();
+
+            var byRoot = GroupByAssemblyRoot(componentTypes);
+
+            foreach ((string? root, var types) in byRoot)
+            {
+                if (types.Count == 0)
+                {
+                    continue;
+                }
+
+                var sorted = types.OrderBy(type => type.FullName).ToList();
+                string block = BuildComponentFactoryRegistrar(sorted);
+
+                if (!outputByRoot.TryGetValue(root, out var builder))
+                {
+                    builder = new StringBuilder();
+                    outputByRoot[root] = builder;
+                }
+
+                builder.Append(block);
+            }
+        }
+
+        private static string BuildComponentFactoryRegistrar(List<Type> types)
+        {
+            var writer = new CodeWriter();
+
+            writer.Line("// Allocation-free component factories — replace Activator.CreateInstance on the hot path.");
+            writer.OpenBlock("internal static class UlinkGeneratedComponentFactories");
+
+            writer.Directive("#if UNITY_EDITOR");
+            writer.Line("[UnityEditor.InitializeOnLoadMethod]");
+            writer.Directive("#endif");
+            writer.Line("[RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]");
+            writer.OpenBlock("private static void RegisterUlinkComponentFactories()");
+
+            foreach (var type in types)
+            {
+                string fqn = "global::" + type.FullName!.Replace('+', '.');
+                writer.Line(
+                    $"{nameof(UlinkComponentRegistry)}.{nameof(UlinkComponentRegistry.Register)}(typeof({fqn}), () => new {fqn}());");
+            }
+
+            writer.CloseBlock(); // method
+            writer.CloseBlock(); // class
+            writer.Line();
+
+            return writer.ToString();
+        }
+
         private static Dictionary<string, List<Type>> GroupByAssemblyRoot(List<Type> types)
         {
             var dict = new Dictionary<string, List<Type>>();
@@ -483,7 +553,8 @@ namespace Ulink.Editor
             writer.OpenBlock($"foreach (var type in value.{nameof(UlinkComponentsType.Types)})");
             writer.Line("if (type == null) continue;");
             writer.Line();
-            writer.Line("object? instance = Activator.CreateInstance(type);");
+            writer.Line(
+                $"object? instance = {nameof(UlinkComponentRegistry)}.{nameof(UlinkComponentRegistry.Create)}(type);");
             writer.Line($"var instanceType = instance as {nameof(IUlinkComponent<VisualElement>)}<{className}>;");
             writer.Line(
                 $"var baseComp = instanceType == null ? instance as {nameof(IUlinkComponent<VisualElement>)}<{nameof(VisualElement)}> : null;");
